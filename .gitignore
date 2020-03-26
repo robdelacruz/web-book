@@ -1,4 +1,5 @@
 *.swp
+*.db
 adv
 static/style.css
 node_modules/
