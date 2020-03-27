@@ -1,4 +1,4 @@
-Thinking of how to code page links:
+# Thinking of how to code page links:
 
 https://en.wikipedia.org/wiki/Help:Wikitext
 wikitext internal links - [[Texas]] or [[Texas|Lone Star State]] where "Lone Star State" will be the text underlined linking to the 'Texas' page.
@@ -9,4 +9,29 @@ will link to the page "wiki/Public_transport/"
 
 or
 New York also has [[public transport|public transportation]].
+
+
+# URL structure:
+
+/<book>/<page>
+
+Ex.
+/space_patrol/#1
+/space_patrol/prologue
+/space_patrol/bridge
+/space_patrol/bridge_left_door
+/space_patrol/bridge_conference_room
+
+You are in the bridge.
+
+What will you do:
+[[bridge left door|Take the left door]] beside Lt. Commander Data.
+[[bridge conference room|Exit to the conference room]] to meet with the crew.
+
+gets translated to:
+
+<p>You are in the bridge.</p>
+<p>What will you do:</p>
+<p><a href="/bridge_left_door/">Take the left door</a> beside Lt. Commander Data.</p>
+<p><a href="/bridge_conference_room/">Exit to the conference room</a> to meet with the crew.</p>
 
