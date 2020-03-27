@@ -35,3 +35,6 @@ gets translated to:
 <p><a href="/bridge_left_door/">Take the left door</a> beside Lt. Commander Data.</p>
 <p><a href="/bridge_conference_room/">Exit to the conference room</a> to meet with the crew.</p>
 
+
+zondicons: http://www.zondicons.com/
+
