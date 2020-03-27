@@ -1,0 +1,12 @@
+Thinking of how to code page links:
+
+https://en.wikipedia.org/wiki/Help:Wikitext
+wikitext internal links - [[Texas]] or [[Texas|Lone Star State]] where "Lone Star State" will be the text underlined linking to the 'Texas' page.
+
+Ex:
+London has [[public transport]] 
+will link to the page "wiki/Public_transport/"
+
+or
+New York also has [[public transport|public transportation]].
+
