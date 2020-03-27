@@ -361,67 +361,84 @@ func validateLogin(w http.ResponseWriter, login *User) bool {
 	return true
 }
 
+// Helper function to make fmt.Fprintf(w, ...) calls shorter.
+// Ex.
+// Replace:
+//   fmt.Fprintf(w, "<p>Some text %s.</p>", str)
+//   fmt.Fprintf(w, "<p>Some other text %s.</p>", str)
+// with the shorter version:
+//   P := makeFprintf(w)
+//   P("<p>Some text %s.</p>", str)
+//   P("<p>Some other text %s.</p>", str)
+func makeFprintf(w io.Writer) func(format string, a ...interface{}) (n int, err error) {
+	return func(format string, a ...interface{}) (n int, err error) {
+		return fmt.Fprintf(w, format, a...)
+	}
+}
+
 func printPageHead(w io.Writer, jsurls []string, cssurls []string) {
-	fmt.Fprintf(w, "<!DOCTYPE html>\n")
-	fmt.Fprintf(w, "<html>\n")
-	fmt.Fprintf(w, "<head>\n")
-	fmt.Fprintf(w, "<meta charset=\"utf-8\">\n")
-	fmt.Fprintf(w, "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n")
-	fmt.Fprintf(w, "<title>Website</title>\n")
-	fmt.Fprintf(w, "<link rel=\"stylesheet\" type=\"text/css\" href=\"/static/style.css\">\n")
-	fmt.Fprintf(w, "<link rel=\"stylesheet\" type=\"text/css\" href=\"/static/nbstyle.css\">\n")
+	P := makeFprintf(w)
+	P("<!DOCTYPE html>\n")
+	P("<html>\n")
+	P("<head>\n")
+	P("<meta charset=\"utf-8\">\n")
+	P("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n")
+	P("<title>Website</title>\n")
+	P("<link rel=\"stylesheet\" type=\"text/css\" href=\"/static/style.css\">\n")
 	for _, cssurl := range cssurls {
-		fmt.Fprintf(w, "<link rel=\"stylesheet\" type=\"text/css\" href=\"%s\">\n", cssurl)
+		P("<link rel=\"stylesheet\" type=\"text/css\" href=\"%s\">\n", cssurl)
 	}
 	for _, jsurl := range jsurls {
-		fmt.Fprintf(w, "<script src=\"%s\" defer></script>\n", jsurl)
+		P("<script src=\"%s\" defer></script>\n", jsurl)
 	}
-	fmt.Fprintf(w, "</head>\n")
-	fmt.Fprintf(w, "<body>\n")
-	fmt.Fprintf(w, "<section class=\"body\">\n")
+	P("</head>\n")
+	P("<body>\n")
+	P("<section class=\"body\">\n")
 }
 
 func printPageFoot(w io.Writer) {
-	fmt.Fprintf(w, "</section>\n")
-	fmt.Fprintf(w, "</body>\n")
-	fmt.Fprintf(w, "</html>\n")
+	P := makeFprintf(w)
+	P("</section>\n")
+	P("</body>\n")
+	P("</html>\n")
 }
 
 func printPageNav(w http.ResponseWriter, login *User) {
-	fmt.Fprintf(w, "<header class=\"p-2 bg-gray-800 text-gray-200\">\n")
-	fmt.Fprintf(w, "<nav class=\"flex flex-row justify-between\">\n")
+	P := makeFprintf(w)
+	P("<header class=\"p-2 bg-gray-800 text-gray-200\">\n")
+	P("<nav class=\"flex flex-row justify-between\">\n")
 
 	// Menu section (left part)
-	fmt.Fprintf(w, "<div>\n")
+	P("<div>\n")
 	var title string
 	if title == "" {
 		title = "Space Patrol"
 	}
-	fmt.Fprintf(w, "<h1 class=\"inline font-bold mr-2\"><a href=\"/\">%s</a></h1>\n", title)
-	fmt.Fprintf(w, "<ul class=\"list-none inline text-xs\">\n")
+	P("<h1 class=\"inline font-bold mr-2\"><a href=\"/\">%s</a></h1>\n", title)
+	P("<ul class=\"list-none inline text-xs\">\n")
 	if login.Userid == ADMIN_ID {
-		fmt.Fprintf(w, "  <li class=\"inline\"><a href=\"/createpage/\">create page</a></li>\n")
+		P("  <li class=\"inline\"><a href=\"/createpage/\">create page</a></li>\n")
 	}
-	fmt.Fprintf(w, "</ul>\n")
-	fmt.Fprintf(w, "</div>\n")
+	P("</ul>\n")
+	P("</div>\n")
 
 	// User section (right part)
-	fmt.Fprintf(w, "<div>\n")
-	fmt.Fprintf(w, "<ul class=\"list-none inline text-xs\">\n")
+	P("<div>\n")
+	P("<ul class=\"list-none inline text-xs\">\n")
 	if login.Userid == -1 {
-		fmt.Fprintf(w, "<li class=\"inline\"><a href=\"/login\">login</a></li>\n")
+		P("<li class=\"inline\"><a href=\"/login\">login</a></li>\n")
 	} else if login.Userid == ADMIN_ID {
-		fmt.Fprintf(w, "<li class=\"inline\"><a href=\"/adminsetup/\">%s</a></li>\n", login.Username)
-		fmt.Fprintf(w, "<li class=\"inline\"><a href=\"/logout\">logout</a></li>\n")
+		P("<li class=\"inline\"><a href=\"/adminsetup/\">%s</a></li>\n", login.Username)
+		P("<li class=\"inline\"><a href=\"/logout\">logout</a></li>\n")
 	} else {
-		fmt.Fprintf(w, "<li class=\"inline\"><a href=\"/usersetup/\">%s</a></li>\n", login.Username)
-		fmt.Fprintf(w, "<li class=\"inline\"><a href=\"/logout\">logout</a></li>\n")
+		P("<li class=\"inline\"><a href=\"/usersetup/\">%s</a></li>\n", login.Username)
+		P("<li class=\"inline\"><a href=\"/logout\">logout</a></li>\n")
 	}
-	fmt.Fprintf(w, "</ul>\n")
-	fmt.Fprintf(w, "</div>\n")
+	P("</ul>\n")
+	P("</div>\n")
 
-	fmt.Fprintf(w, "</nav>\n")
-	fmt.Fprintf(w, "</header>\n")
+	P("</nav>\n")
+	P("</header>\n")
 }
 
 func loginHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
@@ -473,35 +490,36 @@ func loginHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		printPageHead(w, nil, nil)
 		printPageNav(w, login)
 
-		fmt.Fprintf(w, "<section class=\"container mx-auto text-sm py-4\">\n")
-		fmt.Fprintf(w, "  <section class=\"flex flex-row\">\n")
-		fmt.Fprintf(w, "    <section class=\"p-4 bg-gray-800 text-green-300 rounded-lg shadow-lg w-64 min-h-64 mr-4\">\n")
-		fmt.Fprintf(w, "      <h1 class=\"text-lg text-gray-200 mb-4\">Login</h1>")
-		fmt.Fprintf(w, "      <form class=\"mb-4\" action=\"/login/?from=%s\" method=\"post\">\n", qfrom)
+		P := makeFprintf(w)
+		P("<section class=\"container text-sm py-4 px-4\">\n")
+		P("  <section class=\"flex flex-row\">\n")
+		P("    <section class=\"widget-1\">\n")
+		P("      <h1 class=\"fg-2 mb-4\">Login</h1>")
+		P("      <form class=\"mb-4\" action=\"/login/?from=%s\" method=\"post\">\n", qfrom)
 		if errmsg != "" {
-			fmt.Fprintf(w, "    <div class=\"mb-2\">\n")
-			fmt.Fprintf(w, "      <p class=\"text-red-500\">%s</p>\n", errmsg)
-			fmt.Fprintf(w, "    </div>\n")
+			P("    <div class=\"mb-2\">\n")
+			P("      <p class=\"text-red-500\">%s</p>\n", errmsg)
+			P("    </div>\n")
 		}
-		fmt.Fprintf(w, "        <div class=\"mb-2\">\n")
-		fmt.Fprintf(w, "          <label class=\"block text-gray-200\" for=\"username\">username</label>\n")
-		fmt.Fprintf(w, "          <input class=\"block border border-gray-500 rounded py-1 px-2 w-full bg-gray-800 text-green-300\" id=\"username\" name=\"username\" type=\"text\" size=\"20\" value=\"%s\">\n", f.username)
-		fmt.Fprintf(w, "        </div>\n")
+		P("        <div class=\"mb-2\">\n")
+		P("          <label class=\"block label-1\" for=\"username\">username</label>\n")
+		P("          <input class=\"block input-1 w-full\" id=\"username\" name=\"username\" type=\"text\" size=\"20\" value=\"%s\">\n", f.username)
+		P("        </div>\n")
 
-		fmt.Fprintf(w, "        <div class=\"mb-2\">\n")
-		fmt.Fprintf(w, "          <label class=\"block text-gray-200\" for=\"password\">password</label>\n")
-		fmt.Fprintf(w, "          <input class=\"block border border-gray-500 rounded py-1 px-2 w-full bg-gray-800 text-green-300\" id=\"password\" name=\"password\" type=\"password\" size=\"20\" value=\"%s\">\n", f.password)
-		fmt.Fprintf(w, "        </div>\n")
+		P("        <div class=\"mb-4\">\n")
+		P("          <label class=\"block label-1\" for=\"password\">password</label>\n")
+		P("          <input class=\"block input-1 w-full\" id=\"password\" name=\"password\" type=\"password\" size=\"20\" value=\"%s\">\n", f.password)
+		P("        </div>\n")
 
-		fmt.Fprintf(w, "        <div class=\"\">\n")
-		fmt.Fprintf(w, "          <button class=\"mx-auto block rounded px-2 py-1 bg-white text-gray-800 bg-gray-200\" type=\"submit\">login</button>\n")
-		fmt.Fprintf(w, "        </div>\n")
-		fmt.Fprintf(w, "      </form>\n")
+		P("        <div class=\"\">\n")
+		P("          <button class=\"block btn-1 text-gray-800 bg-gray-200\" type=\"submit\">login</button>\n")
+		P("        </div>\n")
+		P("      </form>\n")
 
-		fmt.Fprintf(w, "      <p class=\"text-center\"><a class=\"underline text-gray-200\" href=\"/createaccount/?from=%s\">Create New Account</a></p>\n", qfrom)
-		fmt.Fprintf(w, "    </section>\n")
-		fmt.Fprintf(w, "  </section>\n")
-		fmt.Fprintf(w, "</section>\n")
+		P("      <p class=\"text-center\"><a class=\"link-2\" href=\"/createaccount/?from=%s\">Create New Account</a></p>\n", qfrom)
+		P("    </section>\n")
+		P("  </section>\n")
+		P("</section>\n")
 
 		printPageFoot(w)
 	}
@@ -585,39 +603,40 @@ func createaccountHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		printPageHead(w, nil, nil)
 		printPageNav(w, login)
 
-		fmt.Fprintf(w, "<section class=\"main\">\n")
-		fmt.Fprintf(w, "<form class=\"simpleform\" action=\"/createaccount/?from=%s\" method=\"post\">\n", qfrom)
-		fmt.Fprintf(w, "<h1 class=\"heading\">Create Account</h1>")
+		P := makeFprintf(w)
+		P("<section class=\"main\">\n")
+		P("<form class=\"simpleform\" action=\"/createaccount/?from=%s\" method=\"post\">\n", qfrom)
+		P("<h1 class=\"heading\">Create Account</h1>")
 		if errmsg != "" {
-			fmt.Fprintf(w, "<div class=\"control\">\n")
-			fmt.Fprintf(w, "<p class=\"error\">%s</p>\n", errmsg)
-			fmt.Fprintf(w, "</div>\n")
+			P("<div class=\"control\">\n")
+			P("<p class=\"error\">%s</p>\n", errmsg)
+			P("</div>\n")
 		}
-		fmt.Fprintf(w, "<div class=\"control\">\n")
-		fmt.Fprintf(w, "<label for=\"username\">username</label>\n")
-		fmt.Fprintf(w, "<input id=\"username\" name=\"username\" type=\"text\" size=\"20\" value=\"%s\">\n", f.username)
-		fmt.Fprintf(w, "</div>\n")
+		P("<div class=\"control\">\n")
+		P("<label for=\"username\">username</label>\n")
+		P("<input id=\"username\" name=\"username\" type=\"text\" size=\"20\" value=\"%s\">\n", f.username)
+		P("</div>\n")
 
-		fmt.Fprintf(w, "<div class=\"control\">\n")
-		fmt.Fprintf(w, "<label for=\"email\">email</label>\n")
-		fmt.Fprintf(w, "<input id=\"email\" name=\"email\" type=\"email\" size=\"20\" value=\"%s\">\n", f.email)
-		fmt.Fprintf(w, "</div>\n")
+		P("<div class=\"control\">\n")
+		P("<label for=\"email\">email</label>\n")
+		P("<input id=\"email\" name=\"email\" type=\"email\" size=\"20\" value=\"%s\">\n", f.email)
+		P("</div>\n")
 
-		fmt.Fprintf(w, "<div class=\"control\">\n")
-		fmt.Fprintf(w, "<label for=\"password\">password</label>\n")
-		fmt.Fprintf(w, "<input id=\"password\" name=\"password\" type=\"password\" size=\"20\" value=\"%s\">\n", f.password)
-		fmt.Fprintf(w, "</div>\n")
+		P("<div class=\"control\">\n")
+		P("<label for=\"password\">password</label>\n")
+		P("<input id=\"password\" name=\"password\" type=\"password\" size=\"20\" value=\"%s\">\n", f.password)
+		P("</div>\n")
 
-		fmt.Fprintf(w, "<div class=\"control\">\n")
-		fmt.Fprintf(w, "<label for=\"password2\">re-enter password</label>\n")
-		fmt.Fprintf(w, "<input id=\"password2\" name=\"password2\" type=\"password\" size=\"20\" value=\"%s\">\n", f.password2)
-		fmt.Fprintf(w, "</div>\n")
+		P("<div class=\"control\">\n")
+		P("<label for=\"password2\">re-enter password</label>\n")
+		P("<input id=\"password2\" name=\"password2\" type=\"password\" size=\"20\" value=\"%s\">\n", f.password2)
+		P("</div>\n")
 
-		fmt.Fprintf(w, "<div class=\"control\">\n")
-		fmt.Fprintf(w, "<button class=\"submit\">create account</button>\n")
-		fmt.Fprintf(w, "</div>\n")
-		fmt.Fprintf(w, "</form>\n")
-		fmt.Fprintf(w, "</section>\n")
+		P("<div class=\"control\">\n")
+		P("<button class=\"submit\">create account</button>\n")
+		P("</div>\n")
+		P("</form>\n")
+		P("</section>\n")
 
 		printPageFoot(w)
 	}
@@ -631,9 +650,17 @@ func indexHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		printPageHead(w, nil, nil)
 		printPageNav(w, login)
 
-		fmt.Fprintf(w, "<section class=\"main\">\n")
+		P := makeFprintf(w)
+		P("<section class=\"container text-sm py-4 px-4\">\n")
+		P("  <section class=\"flex flex-row content-start\">\n")
+		P("    <section class=\"widget-1 min-h-64 w-1/4\">\n")
+		P("      <h1 class=\"fg-2 mb-4\">Which Adventure:</h1>\n")
+		P("      <a class=\"block mb-2\" href=\"/space_patrol/\">Space Patrol</a>\n")
+		P("      <a class=\"block mb-2\" href=\"/hyperspace/\">Hyperspace</a>\n")
+		P("    </section>\n")
+		P("  </section>\n")
+		P("</section>\n")
 
-		fmt.Fprintf(w, "</section>\n")
 		printPageFoot(w)
 	}
 }
@@ -682,31 +709,32 @@ func createpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
 		printPageHead(w, nil, nil)
 		printPageNav(w, login)
-		fmt.Fprintf(w, "<section class=\"main\">\n")
 
-		fmt.Fprintf(w, "<form class=\"simpleform mb-2xl\" method=\"post\" action=\"/createpage/\">\n")
+		P := makeFprintf(w)
+		P("<section class=\"main\">\n")
+		P("<form class=\"simpleform mb-2xl\" method=\"post\" action=\"/createpage/\">\n")
 		if errmsg != "" {
-			fmt.Fprintf(w, "<div class=\"control\">\n")
-			fmt.Fprintf(w, "<p class=\"error\">%s</p>\n", errmsg)
-			fmt.Fprintf(w, "</div>\n")
+			P("<div class=\"control\">\n")
+			P("<p class=\"error\">%s</p>\n", errmsg)
+			P("</div>\n")
 		}
 
-		fmt.Fprintf(w, "<div class=\"control\">\n")
-		fmt.Fprintf(w, "<label for=\"title\">title</label>\n")
-		fmt.Fprintf(w, "<input id=\"title\" name=\"title\" type=\"text\" size=\"60\" value=\"%s\">\n", p.Title)
-		fmt.Fprintf(w, "</div>\n")
+		P("<div class=\"control\">\n")
+		P("<label for=\"title\">title</label>\n")
+		P("<input id=\"title\" name=\"title\" type=\"text\" size=\"60\" value=\"%s\">\n", p.Title)
+		P("</div>\n")
 
-		fmt.Fprintf(w, "  <div class=\"control\">\n")
-		fmt.Fprintf(w, "    <label for=\"body\">text</label>\n")
-		fmt.Fprintf(w, "    <textarea id=\"body\" name=\"body\" rows=\"6\" cols=\"60\">%s</textarea>\n", p.Body)
-		fmt.Fprintf(w, "  </div>\n")
+		P("  <div class=\"control\">\n")
+		P("    <label for=\"body\">text</label>\n")
+		P("    <textarea id=\"body\" name=\"body\" rows=\"6\" cols=\"60\">%s</textarea>\n", p.Body)
+		P("  </div>\n")
 
-		fmt.Fprintf(w, "  <div class=\"control\">\n")
-		fmt.Fprintf(w, "    <button class=\"submit\">submit</button>\n")
-		fmt.Fprintf(w, "  </div>\n")
-		fmt.Fprintf(w, "</form>\n")
+		P("  <div class=\"control\">\n")
+		P("    <button class=\"submit\">submit</button>\n")
+		P("  </div>\n")
+		P("</form>\n")
 
-		fmt.Fprintf(w, "</section>\n")
+		P("</section>\n")
 		printPageFoot(w)
 	}
 }
