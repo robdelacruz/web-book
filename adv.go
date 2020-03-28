@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -89,6 +90,8 @@ Initialize new book file:
 	}
 
 	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("./static"))))
+	http.HandleFunc("/favicon.ico", func(w http.ResponseWriter, r *http.Request) { http.ServeFile(w, r, "./static/coffee.ico") })
+
 	http.HandleFunc("/login/", loginHandler(db))
 	http.HandleFunc("/logout/", logoutHandler(db))
 	http.HandleFunc("/createaccount/", createaccountHandler(db))
@@ -424,6 +427,36 @@ func getSelectedPage(r *http.Request, db *sql.DB, bookid int64) *Page {
 	return queryPage(db, pageid, bookid)
 }
 
+func queryBookName(db *sql.DB, name string) *Book {
+	var b Book
+	s := "SELECT book_id, name FROM book WHERE name = ?"
+	row := db.QueryRow(s, name)
+	err := row.Scan(&b.Bookid, &b.Name)
+	if err == sql.ErrNoRows {
+		return nil
+	}
+	if err != nil {
+		fmt.Printf("queryBook() db error (%s)\n", err)
+		return nil
+	}
+	return &b
+}
+
+func queryPageName(db *sql.DB, bookid int64, title string) *Page {
+	var p Page
+	s := "SELECT page_id, book_id, title, body FROM page WHERE book_id = ? AND title = ?"
+	row := db.QueryRow(s, bookid, title)
+	err := row.Scan(&p.Pageid, &p.Bookid, &p.Title, &p.Body)
+	if err == sql.ErrNoRows {
+		return nil
+	}
+	if err != nil {
+		fmt.Printf("queryBook() db error (%s)\n", err)
+		return nil
+	}
+	return &p
+}
+
 // Helper function to make fmt.Fprintf(w, ...) calls shorter.
 // Ex.
 // Replace:
@@ -708,24 +741,56 @@ func createaccountHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 	}
 }
 
+func parseBookPageUrl(url string) (string, string) {
+	var bookName, pageName string
+
+	sre := `^/(\w+)(?:/(\w*))?/?$`
+	re := regexp.MustCompile(sre)
+	matches := re.FindStringSubmatch(url)
+	if matches == nil {
+		return bookName, pageName
+	}
+	bookName = matches[1]
+	if len(matches) > 2 {
+		pageName = matches[2]
+	}
+	return underscoreToSpace(bookName), underscoreToSpace(pageName)
+}
+
+func spaceToUnderscore(s string) string {
+	return strings.Replace(s, " ", "_", -1)
+}
+
+func underscoreToSpace(s string) string {
+	return strings.Replace(s, "_", " ", -1)
+}
+
 func indexHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		login := getLoginUser(r, db)
-		b := getSelectedBook(r, db)
 
-		w.Header().Set("Content-Type", "text/html")
-		printHead(w, nil, nil)
-		printNav(w, r, db, login, b)
-
-		if b.Bookid == -1 {
-			printBooksMenu(w, db)
+		bookName, pageTitle := parseBookPageUrl(r.URL.Path)
+		if pageTitle == "" {
+			pageTitle = "start"
+		}
+		var b *Book
+		if bookName != "" {
+			b = queryBookName(db, bookName)
 		}
 
-		printFoot(w)
+		if b == nil {
+			printBooksMenu(w, r, db, login)
+			return
+		}
+		printPage(w, r, db, login, b, pageTitle)
 	}
 }
 
-func printBooksMenu(w http.ResponseWriter, db *sql.DB) {
+func printBooksMenu(w http.ResponseWriter, r *http.Request, db *sql.DB, login *User) {
+	w.Header().Set("Content-Type", "text/html")
+	printHead(w, nil, nil)
+	printNav(w, r, db, login, nil)
+
 	P := makeFprintf(w)
 	P("<section class=\"container text-sm py-4 px-4\">\n")
 	P("  <section class=\"flex flex-row content-start\">\n")
@@ -740,11 +805,38 @@ func printBooksMenu(w http.ResponseWriter, db *sql.DB) {
 	var b Book
 	for rows.Next() {
 		rows.Scan(&b.Bookid, &b.Name)
-		P("<a class=\"block ml-2 mb-2\" href=\"/?bookid=%d\">%s</a>\n", b.Bookid, b.Name)
+		P("<a class=\"block ml-2 mb-2\" href=\"/%s\">%s</a>\n", spaceToUnderscore(b.Name), b.Name)
 	}
 	P("    </section>\n")
 	P("  </section>\n")
 	P("</section>\n")
+
+	printFoot(w)
+}
+
+func printPage(w http.ResponseWriter, r *http.Request, db *sql.DB, login *User, b *Book, pageTitle string) {
+	w.Header().Set("Content-Type", "text/html")
+	printHead(w, nil, nil)
+	printNav(w, r, db, login, nil)
+
+	P := makeFprintf(w)
+	P("<section class=\"container text-sm py-4 px-4\">\n")
+	P("  <section class=\"flex flex-row content-start\">\n")
+	P("    <section class=\"widget-1 min-h-64 w-1/4\">\n")
+
+	p := queryPageName(db, b.Bookid, pageTitle)
+	if p == nil {
+		P("<h1 class=\"fg-2 mb-4\">Page Not Found</h1>\n")
+		if login.Userid == ADMIN_ID {
+			P("<a class=\"block ml-2 mb-2\" href=\"/createpage?bookid=%d&title=%s\">Create page '%s'</a>\n", b.Bookid, url.QueryEscape(pageTitle), pageTitle)
+		}
+	}
+
+	P("    </section>\n")
+	P("  </section>\n")
+	P("</section>\n")
+
+	printFoot(w)
 }
 
 func createPageUrl(id int64) string {
@@ -753,9 +845,12 @@ func createPageUrl(id int64) string {
 
 func createpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		login := getLoginUser(r, db)
-
 		var p Page
+
+		login := getLoginUser(r, db)
+		bookid := idtoi(r.FormValue("bookid"))
+		p.Title = strings.TrimSpace(r.FormValue("title"))
+		p.Body = strings.TrimSpace(r.FormValue("body"))
 
 		var errmsg string
 		if r.Method == "POST" {
@@ -764,15 +859,13 @@ func createpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 			}
 
 			for {
-				p.Title = strings.TrimSpace(r.FormValue("title"))
-				p.Body = strings.TrimSpace(r.FormValue("body"))
 				if p.Body == "" {
 					errmsg = "Please enter some text."
 					break
 				}
 
-				s := "INSERT INTO page (title, body) VALUES (?, ?)"
-				result, err := sqlexec(db, s, p.Title, p.Body)
+				s := "INSERT INTO page (book_id, title, body) VALUES (?, ?, ?)"
+				result, err := sqlexec(db, s, bookid, p.Title, p.Body)
 				if err != nil {
 					log.Printf("DB error creating page (%s)\n", err)
 					errmsg = "A problem occured. Please try again."
