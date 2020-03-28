@@ -29,8 +29,14 @@ type Site struct {
 	Desc  string
 }
 
+type Book struct {
+	Bookid int64
+	Name   string
+}
+
 type Page struct {
 	Pageid int64
+	Bookid int64
 	Title  string
 	Body   string
 }
@@ -217,9 +223,12 @@ func createAndInitTables(newfile string) {
 
 	ss := []string{
 		"BEGIN TRANSACTION;",
-		"CREATE TABLE page (page_id INTEGER PRIMARY KEY NOT NULL, title TEXT, body TEXT);",
+		"CREATE TABLE book (book_id INTEGER PRIMARY KEY NOT NULL, name TEXT);",
+		"CREATE TABLE page (page_id INTEGER PRIMARY KEY NOT NULL, book_id INTEGER NOT NULL, title TEXT, body TEXT);",
 		"CREATE TABLE user (user_id INTEGER PRIMARY KEY NOT NULL, username TEXT, password TEXT, active INTEGER NOT NULL, email TEXT, CONSTRAINT unique_username UNIQUE (username));",
 		"INSERT INTO user (user_id, username, password, active, email) VALUES (1, 'admin', '', 1, '');",
+		"INSERT INTO book (book_id, name) VALUES (1, 'ABC Quest');",
+		"INSERT INTO book (book_id, name) VALUES (2, 'A Normal Day Adventure');",
 		"COMMIT;",
 	}
 
@@ -361,6 +370,60 @@ func validateLogin(w http.ResponseWriter, login *User) bool {
 	return true
 }
 
+func queryBook(db *sql.DB, bookid int64) *Book {
+	var b Book
+	b.Bookid = -1
+
+	s := "SELECT book_id, name FROM book WHERE book_id = ?"
+	row := db.QueryRow(s, bookid)
+	err := row.Scan(&b.Bookid, &b.Name)
+	if err == sql.ErrNoRows {
+		return &b
+	}
+	if err != nil {
+		fmt.Printf("queryBook() db error (%s)\n", err)
+		return &b
+	}
+	return &b
+}
+
+func getSelectedBook(r *http.Request, db *sql.DB) *Book {
+	bookid := idtoi(r.FormValue("bookid"))
+	if bookid == -1 {
+		var b Book
+		b.Bookid = -1
+		return &b
+	}
+	return queryBook(db, bookid)
+}
+
+func queryPage(db *sql.DB, pageid, bookid int64) *Page {
+	var p Page
+	p.Pageid = -1
+
+	s := "SELECT page_id, title, body FROM page WHERE page_id = ? AND book_id = ?"
+	row := db.QueryRow(s, pageid, bookid)
+	err := row.Scan(&p.Pageid, &p.Title, &p.Body)
+	if err == sql.ErrNoRows {
+		return &p
+	}
+	if err != nil {
+		fmt.Printf("queryPage() db error (%s)\n", err)
+		return &p
+	}
+	return &p
+}
+
+func getSelectedPage(r *http.Request, db *sql.DB, bookid int64) *Page {
+	pageid := idtoi(r.FormValue("pageid"))
+	if pageid == -1 {
+		var p Page
+		p.Pageid = -1
+		return &p
+	}
+	return queryPage(db, pageid, bookid)
+}
+
 // Helper function to make fmt.Fprintf(w, ...) calls shorter.
 // Ex.
 // Replace:
@@ -376,7 +439,7 @@ func makeFprintf(w io.Writer) func(format string, a ...interface{}) (n int, err 
 	}
 }
 
-func printPageHead(w io.Writer, jsurls []string, cssurls []string) {
+func printHead(w io.Writer, jsurls []string, cssurls []string) {
 	P := makeFprintf(w)
 	P("<!DOCTYPE html>\n")
 	P("<html>\n")
@@ -396,28 +459,31 @@ func printPageHead(w io.Writer, jsurls []string, cssurls []string) {
 	P("<section class=\"body\">\n")
 }
 
-func printPageFoot(w io.Writer) {
+func printFoot(w io.Writer) {
 	P := makeFprintf(w)
 	P("</section>\n")
 	P("</body>\n")
 	P("</html>\n")
 }
 
-func printPageNav(w http.ResponseWriter, login *User) {
+func printNav(w http.ResponseWriter, r *http.Request, db *sql.DB, login *User, b *Book) {
+	if login == nil {
+		login = getLoginUser(r, db)
+	}
+	if b == nil {
+		b = getSelectedBook(r, db)
+	}
+
 	P := makeFprintf(w)
 	P("<header class=\"p-2 bg-gray-800 text-gray-200\">\n")
 	P("<nav class=\"flex flex-row justify-between\">\n")
 
 	// Menu section (left part)
 	P("<div>\n")
-	var title string
-	if title == "" {
-		title = "Space Patrol"
-	}
-	P("<h1 class=\"inline font-bold mr-2\"><a href=\"/\">%s</a></h1>\n", title)
-	P("<ul class=\"list-none inline text-xs\">\n")
-	if login.Userid == ADMIN_ID {
-		P("  <li class=\"inline\"><a href=\"/createpage/\">create page</a></li>\n")
+	P("<h1 class=\"inline font-bold mr-2\"><a href=\"/\">Game Books</a></h1>\n")
+	P("<ul class=\"list-none inline\">\n")
+	if b.Bookid != -1 {
+		P("  <li class=\"inline\"><a class=\"link-1 no-underline\" href=\"/?bookid=%d\">%s</a></li>\n", b.Bookid, b.Name)
 	}
 	P("</ul>\n")
 	P("</div>\n")
@@ -487,8 +553,8 @@ func loginHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		}
 
 		w.Header().Set("Content-Type", "text/html")
-		printPageHead(w, nil, nil)
-		printPageNav(w, login)
+		printHead(w, nil, nil)
+		printNav(w, r, db, login, nil)
 
 		P := makeFprintf(w)
 		P("<section class=\"container text-sm py-4 px-4\">\n")
@@ -521,7 +587,7 @@ func loginHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		P("  </section>\n")
 		P("</section>\n")
 
-		printPageFoot(w)
+		printFoot(w)
 	}
 }
 
@@ -600,8 +666,8 @@ func createaccountHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		}
 
 		w.Header().Set("Content-Type", "text/html")
-		printPageHead(w, nil, nil)
-		printPageNav(w, login)
+		printHead(w, nil, nil)
+		printNav(w, r, db, login, nil)
 
 		P := makeFprintf(w)
 		P("<section class=\"main\">\n")
@@ -638,31 +704,47 @@ func createaccountHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		P("</form>\n")
 		P("</section>\n")
 
-		printPageFoot(w)
+		printFoot(w)
 	}
 }
 
 func indexHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		login := getLoginUser(r, db)
+		b := getSelectedBook(r, db)
 
 		w.Header().Set("Content-Type", "text/html")
-		printPageHead(w, nil, nil)
-		printPageNav(w, login)
+		printHead(w, nil, nil)
+		printNav(w, r, db, login, b)
 
-		P := makeFprintf(w)
-		P("<section class=\"container text-sm py-4 px-4\">\n")
-		P("  <section class=\"flex flex-row content-start\">\n")
-		P("    <section class=\"widget-1 min-h-64 w-1/4\">\n")
-		P("      <h1 class=\"fg-2 mb-4\">Which Adventure:</h1>\n")
-		P("      <a class=\"block mb-2\" href=\"/space_patrol/\">Space Patrol</a>\n")
-		P("      <a class=\"block mb-2\" href=\"/hyperspace/\">Hyperspace</a>\n")
-		P("    </section>\n")
-		P("  </section>\n")
-		P("</section>\n")
+		if b.Bookid == -1 {
+			printBooksMenu(w, db)
+		}
 
-		printPageFoot(w)
+		printFoot(w)
 	}
+}
+
+func printBooksMenu(w http.ResponseWriter, db *sql.DB) {
+	P := makeFprintf(w)
+	P("<section class=\"container text-sm py-4 px-4\">\n")
+	P("  <section class=\"flex flex-row content-start\">\n")
+	P("    <section class=\"widget-1 min-h-64 w-1/4\">\n")
+	P("      <h1 class=\"fg-2 mb-4\">Select Book:</h1>\n")
+
+	s := "SELECT book_id, name FROM book ORDER BY book_id"
+	rows, err := db.Query(s)
+	if handleDbErr(w, err, "indexhandler") {
+		return
+	}
+	var b Book
+	for rows.Next() {
+		rows.Scan(&b.Bookid, &b.Name)
+		P("<a class=\"block ml-2 mb-2\" href=\"/?bookid=%d\">%s</a>\n", b.Bookid, b.Name)
+	}
+	P("    </section>\n")
+	P("  </section>\n")
+	P("</section>\n")
 }
 
 func createPageUrl(id int64) string {
@@ -707,8 +789,8 @@ func createpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		}
 
 		w.Header().Set("Content-Type", "text/html")
-		printPageHead(w, nil, nil)
-		printPageNav(w, login)
+		printHead(w, nil, nil)
+		printNav(w, r, db, login, nil)
 
 		P := makeFprintf(w)
 		P("<section class=\"main\">\n")
@@ -735,6 +817,6 @@ func createpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		P("</form>\n")
 
 		P("</section>\n")
-		printPageFoot(w)
+		printFoot(w)
 	}
 }
