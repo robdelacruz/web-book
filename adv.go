@@ -396,14 +396,19 @@ func queryBook(db *sql.DB, bookid int64) *Book {
 	return &b
 }
 
-func getSelectedBook(r *http.Request, db *sql.DB) *Book {
-	bookid := idtoi(r.FormValue("bookid"))
-	if bookid == -1 {
-		var b Book
-		b.Bookid = -1
-		return &b
+func queryBookName(db *sql.DB, name string) *Book {
+	var b Book
+	s := "SELECT book_id, name FROM book WHERE name = ?"
+	row := db.QueryRow(s, name)
+	err := row.Scan(&b.Bookid, &b.Name)
+	if err == sql.ErrNoRows {
+		return nil
 	}
-	return queryBook(db, bookid)
+	if err != nil {
+		fmt.Printf("queryBook() db error (%s)\n", err)
+		return nil
+	}
+	return &b
 }
 
 func queryPage(db *sql.DB, pageid, bookid int64) *Page {
@@ -421,31 +426,6 @@ func queryPage(db *sql.DB, pageid, bookid int64) *Page {
 		return &p
 	}
 	return &p
-}
-
-func getSelectedPage(r *http.Request, db *sql.DB, bookid int64) *Page {
-	pageid := idtoi(r.FormValue("pageid"))
-	if pageid == -1 {
-		var p Page
-		p.Pageid = -1
-		return &p
-	}
-	return queryPage(db, pageid, bookid)
-}
-
-func queryBookName(db *sql.DB, name string) *Book {
-	var b Book
-	s := "SELECT book_id, name FROM book WHERE name = ?"
-	row := db.QueryRow(s, name)
-	err := row.Scan(&b.Bookid, &b.Name)
-	if err == sql.ErrNoRows {
-		return nil
-	}
-	if err != nil {
-		fmt.Printf("queryBook() db error (%s)\n", err)
-		return nil
-	}
-	return &b
 }
 
 func queryPageName(db *sql.DB, bookid int64, title string) *Page {
@@ -510,7 +490,10 @@ func printNav(w http.ResponseWriter, r *http.Request, db *sql.DB, login *User, b
 		login = getLoginUser(r, db)
 	}
 	if b == nil {
-		b = getSelectedBook(r, db)
+		bookName, _ := parseBookPageUrl(r.URL.Path)
+		if bookName != "" {
+			b = queryBookName(db, bookName)
+		}
 	}
 
 	P := makeFprintf(w)
@@ -521,8 +504,8 @@ func printNav(w http.ResponseWriter, r *http.Request, db *sql.DB, login *User, b
 	P("<div>\n")
 	P("<h1 class=\"inline font-bold mr-2\"><a href=\"/\">Game Books</a></h1>\n")
 	P("<ul class=\"list-none inline\">\n")
-	if b.Bookid != -1 {
-		P("  <li class=\"inline\"><a class=\"link-1 no-underline\" href=\"/?bookid=%d\">%s</a></li>\n", b.Bookid, b.Name)
+	if b != nil {
+		P("  <li class=\"inline\"><a class=\"link-1 no-underline\" href=\"%s\">%s</a></li>\n", createPageUrl(b.Name, ""), b.Name)
 	}
 	P("</ul>\n")
 	P("</div>\n")
@@ -776,9 +759,6 @@ func indexHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		login := getLoginUser(r, db)
 
 		bookName, pageTitle := parseBookPageUrl(r.URL.Path)
-		if pageTitle == "" {
-			pageTitle = "start"
-		}
 		var b *Book
 		if bookName != "" {
 			b = queryBookName(db, bookName)
@@ -804,7 +784,7 @@ func printBooksMenu(w http.ResponseWriter, r *http.Request, db *sql.DB, login *U
 	P := makeFprintf(w)
 	P("<section class=\"container text-sm py-4 px-4\">\n")
 	P("  <section class=\"flex flex-row content-start\">\n")
-	P("    <section class=\"widget-1 min-h-64 w-1/4\">\n")
+	P("    <section class=\"widget-1 min-h-64 w-1/3\">\n")
 	P("      <h1 class=\"fg-2 mb-4\">Select Book:</h1>\n")
 
 	s := "SELECT book_id, name FROM book ORDER BY book_id"
@@ -815,7 +795,7 @@ func printBooksMenu(w http.ResponseWriter, r *http.Request, db *sql.DB, login *U
 	var b Book
 	for rows.Next() {
 		rows.Scan(&b.Bookid, &b.Name)
-		P("<a class=\"block ml-2 mb-2\" href=\"/%s\">%s</a>\n", spaceToUnderscore(b.Name), b.Name)
+		P("<a class=\"block link-1 no-underline ml-2 mb-2\" href=\"/%s\">%s</a>\n", spaceToUnderscore(b.Name), b.Name)
 	}
 	P("    </section>\n")
 	P("  </section>\n")
@@ -825,6 +805,10 @@ func printBooksMenu(w http.ResponseWriter, r *http.Request, db *sql.DB, login *U
 }
 
 func printPage(w http.ResponseWriter, r *http.Request, db *sql.DB, login *User, b *Book, pageTitle string) {
+	if pageTitle == "" {
+		pageTitle = "start"
+	}
+
 	w.Header().Set("Content-Type", "text/html")
 	printHead(w, nil, nil)
 	printNav(w, r, db, login, nil)
@@ -832,7 +816,7 @@ func printPage(w http.ResponseWriter, r *http.Request, db *sql.DB, login *User, 
 	P := makeFprintf(w)
 	P("<section class=\"container text-sm py-4 px-4\">\n")
 	P("  <section class=\"flex flex-row content-start\">\n")
-	P("    <section class=\"widget-1 min-h-64 w-1/4\">\n")
+	P("    <section class=\"widget-1 min-h-64 w-1/3\">\n")
 
 	p := queryPageName(db, b.Bookid, pageTitle)
 	if p == nil {
@@ -843,6 +827,7 @@ func printPage(w http.ResponseWriter, r *http.Request, db *sql.DB, login *User, 
 		}
 	} else {
 		P("<article class=\"page\">\n")
+		p.Body = translateLinks(p.Body, b.Name)
 		P(parseMarkdown(p.Body))
 		P("</article>\n")
 	}
@@ -861,7 +846,7 @@ func createPageUrl(bookName, pageTitle string) string {
 // "[[Texas|Lone Star State]]" => "[Lone Star State](/Texas)"
 // "[[Enterprise Bridge|Go to Captain's Bridge]]" => "[Go to Captain's Bridge](/Enterprise_Bridge)"
 func translateLinks(body, bookName string) string {
-	sre := `\[\[([\w\s/]+)\|([\w\s/]+)\]\]`
+	sre := `\[\[([\w\s/]+)\|(.+)\]\]`
 	re := regexp.MustCompile(sre)
 
 	// Change wikitext links to use page link with underscores:
@@ -916,8 +901,6 @@ func createpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 					break
 				}
 
-				p.Body = translateLinks(p.Body, b.Name)
-
 				s := "INSERT INTO page (book_id, title, body) VALUES (?, ?, ?)"
 				_, err := sqlexec(db, s, bookid, p.Title, p.Body)
 				if err != nil {
@@ -932,12 +915,12 @@ func createpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 
 		w.Header().Set("Content-Type", "text/html")
 		printHead(w, nil, nil)
-		printNav(w, r, db, login, nil)
+		printNav(w, r, db, login, b)
 
 		P := makeFprintf(w)
 		P("<section class=\"container text-sm py-4 px-4\">\n")
 		P("  <section class=\"flex flex-row\">\n")
-		P("    <section class=\"widget-1\">\n")
+		P("    <section class=\"widget-1 w-1/3\">\n")
 		if p.Title == "" {
 			P("      <h1 class=\"fg-2 mb-4\">Create Page</h1>")
 		} else {
@@ -961,7 +944,7 @@ func createpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 
 		P("  <div class=\"mb-4\">\n")
 		P("    <label class=\"block label-1\" for=\"body\">text</label>\n")
-		P("    <textarea class=\"block input-1 w-full\" id=\"body\" name=\"body\" rows=\"6\" cols=\"60\">%s</textarea>\n", p.Body)
+		P("    <textarea class=\"block input-1 w-full\" id=\"body\" name=\"body\" rows=\"15\">%s</textarea>\n", p.Body)
 		P("  </div>\n")
 
 		P("  <div class=\"\">\n")
