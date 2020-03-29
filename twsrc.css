@@ -36,6 +36,8 @@
 .input-1 {@apply border border-color-1 rounded py-1 px-2 bg-1 fg-1;}
 .btn-1 {@apply mx-auto rounded py-1 px-2;} 
 
+.page a {@apply link-1;}
+
 @tailwind utilities;
 
 .min-h-64 {min-height: 16rem;}

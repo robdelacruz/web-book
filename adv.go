@@ -14,6 +14,7 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 	"golang.org/x/crypto/bcrypt"
+	"gopkg.in/russross/blackfriday.v2"
 )
 
 const ADMIN_ID = 1
@@ -57,6 +58,10 @@ func main() {
 		createAndInitTables(dbfile)
 		os.Exit(0)
 	}
+
+	//$$ translate link test
+	//body := "Now is the time for all good men to come to the aid of the party. You can decide to [[left door|take the left door]] or [[right door|the right door]]."
+	//fmt.Printf(translateLinks(body, "Space Patrol"))
 
 	// Need to specify a db file as first parameter.
 	if len(parms) == 0 {
@@ -820,12 +825,6 @@ func printBooksMenu(w http.ResponseWriter, r *http.Request, db *sql.DB, login *U
 }
 
 func printPage(w http.ResponseWriter, r *http.Request, db *sql.DB, login *User, b *Book, pageTitle string) {
-	p := queryPageName(db, b.Bookid, pageTitle)
-	if p == nil && login.Userid != ADMIN_ID {
-		http.Error(w, fmt.Sprintf("Page '%s' not found.", pageTitle), 404)
-		return
-	}
-
 	w.Header().Set("Content-Type", "text/html")
 	printHead(w, nil, nil)
 	printNav(w, r, db, login, nil)
@@ -835,11 +834,17 @@ func printPage(w http.ResponseWriter, r *http.Request, db *sql.DB, login *User, 
 	P("  <section class=\"flex flex-row content-start\">\n")
 	P("    <section class=\"widget-1 min-h-64 w-1/4\">\n")
 
-	if p == nil && login.Userid == ADMIN_ID {
+	p := queryPageName(db, b.Bookid, pageTitle)
+	if p == nil {
 		P("<h1 class=\"fg-2 mb-4\">Page Not Found</h1>\n")
-		P("<a class=\"block ml-2 mb-2\" href=\"/createpage?bookid=%d&title=%s\">Create page '%s'</a>\n", b.Bookid, url.QueryEscape(pageTitle), pageTitle)
+
+		if login.Userid == ADMIN_ID {
+			P("<a class=\"block ml-2 mb-2\" href=\"/createpage?bookid=%d&title=%s\">Create page '%s'</a>\n", b.Bookid, url.QueryEscape(pageTitle), pageTitle)
+		}
 	} else {
-		P("<p>%s</p>\n", p.Body)
+		P("<article class=\"page\">\n")
+		P(parseMarkdown(p.Body))
+		P("</article>\n")
 	}
 
 	P("    </section>\n")
@@ -849,7 +854,31 @@ func printPage(w http.ResponseWriter, r *http.Request, db *sql.DB, login *User, 
 }
 
 func createPageUrl(bookName, pageTitle string) string {
-	return fmt.Sprintf("/%s/%s", bookName, spaceToUnderscore(pageTitle))
+	return fmt.Sprintf("/%s/%s", spaceToUnderscore(bookName), spaceToUnderscore(pageTitle))
+}
+
+// Translate wikitext links into markdown links.
+// "[[Texas|Lone Star State]]" => "[Lone Star State](/Texas)"
+// "[[Enterprise Bridge|Go to Captain's Bridge]]" => "[Go to Captain's Bridge](/Enterprise_Bridge)"
+func translateLinks(body, bookName string) string {
+	sre := `\[\[([\w\s/]+)\|([\w\s/]+)\]\]`
+	re := regexp.MustCompile(sre)
+
+	// Change wikitext links to use page link with underscores:
+	// "[[Enterprise Bridge|Go to bridge]]" => "[[/Book_Name/Enterprise_Bridge|Go to bridge]]"
+	body = re.ReplaceAllStringFunc(body, func(slink string) string {
+		matches := re.FindStringSubmatch(slink)
+		return fmt.Sprintf("[[/%s/%s|%s]]", spaceToUnderscore(bookName), spaceToUnderscore(matches[1]), matches[2])
+	})
+
+	// Replace wikitext link with equivalent markdown link:
+	// "[[Book_Name/Enterprise_Bridge|Go to bridge]]" => "[Go to bridge](/Book_Name/Enterprise_Bridge)"
+	body = re.ReplaceAllString(body, "[$2]($1)")
+	return body
+}
+
+func parseMarkdown(s string) string {
+	return string(blackfriday.Run([]byte(s), blackfriday.WithExtensions(blackfriday.HardLineBreak)))
 }
 
 func createpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
@@ -886,6 +915,8 @@ func createpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 					errmsg = "Please enter some text."
 					break
 				}
+
+				p.Body = translateLinks(p.Body, b.Name)
 
 				s := "INSERT INTO page (book_id, title, body) VALUES (?, ?, ?)"
 				_, err := sqlexec(db, s, bookid, p.Title, p.Body)

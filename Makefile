@@ -1,6 +1,9 @@
 all: adv static/style.css
 
 dep:
+	go get -u github.com/mattn/go-sqlite3
+	go get -u golang.org/x/crypto/bcrypt
+	go get -u gopkg.in/russross/blackfriday.v2
 	npm install tailwindcss
 	npm install npx
 
