@@ -381,11 +381,12 @@ func queryBook(db *sql.DB, bookid int64) *Book {
 	row := db.QueryRow(s, bookid)
 	err := row.Scan(&b.Bookid, &b.Name)
 	if err == sql.ErrNoRows {
+		return nil
 		return &b
 	}
 	if err != nil {
 		fmt.Printf("queryBook() db error (%s)\n", err)
-		return &b
+		return nil
 	}
 	return &b
 }
@@ -776,9 +777,13 @@ func indexHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		var b *Book
 		if bookName != "" {
 			b = queryBookName(db, bookName)
+			if b == nil {
+				http.Error(w, fmt.Sprintf("'%s' not found.", bookName), 404)
+				return
+			}
 		}
 
-		if b == nil {
+		if bookName == "" {
 			printBooksMenu(w, r, db, login)
 			return
 		}
@@ -815,6 +820,12 @@ func printBooksMenu(w http.ResponseWriter, r *http.Request, db *sql.DB, login *U
 }
 
 func printPage(w http.ResponseWriter, r *http.Request, db *sql.DB, login *User, b *Book, pageTitle string) {
+	p := queryPageName(db, b.Bookid, pageTitle)
+	if p == nil && login.Userid != ADMIN_ID {
+		http.Error(w, fmt.Sprintf("Page '%s' not found.", pageTitle), 404)
+		return
+	}
+
 	w.Header().Set("Content-Type", "text/html")
 	printHead(w, nil, nil)
 	printNav(w, r, db, login, nil)
@@ -824,23 +835,21 @@ func printPage(w http.ResponseWriter, r *http.Request, db *sql.DB, login *User, 
 	P("  <section class=\"flex flex-row content-start\">\n")
 	P("    <section class=\"widget-1 min-h-64 w-1/4\">\n")
 
-	p := queryPageName(db, b.Bookid, pageTitle)
-	if p == nil {
+	if p == nil && login.Userid == ADMIN_ID {
 		P("<h1 class=\"fg-2 mb-4\">Page Not Found</h1>\n")
-		if login.Userid == ADMIN_ID {
-			P("<a class=\"block ml-2 mb-2\" href=\"/createpage?bookid=%d&title=%s\">Create page '%s'</a>\n", b.Bookid, url.QueryEscape(pageTitle), pageTitle)
-		}
+		P("<a class=\"block ml-2 mb-2\" href=\"/createpage?bookid=%d&title=%s\">Create page '%s'</a>\n", b.Bookid, url.QueryEscape(pageTitle), pageTitle)
+	} else {
+		P("<p>%s</p>\n", p.Body)
 	}
 
 	P("    </section>\n")
 	P("  </section>\n")
 	P("</section>\n")
-
 	printFoot(w)
 }
 
-func createPageUrl(id int64) string {
-	return fmt.Sprintf("/page/?id=%d", id)
+func createPageUrl(bookName, pageTitle string) string {
+	return fmt.Sprintf("/%s/%s", bookName, spaceToUnderscore(pageTitle))
 }
 
 func createpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
@@ -851,6 +860,20 @@ func createpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		bookid := idtoi(r.FormValue("bookid"))
 		p.Title = strings.TrimSpace(r.FormValue("title"))
 		p.Body = strings.TrimSpace(r.FormValue("body"))
+
+		if login.Userid != ADMIN_ID {
+			http.Error(w, "admin user required", 401)
+			return
+		}
+		if bookid == -1 {
+			http.Error(w, "bookid required", 401)
+			return
+		}
+		b := queryBook(db, bookid)
+		if b == nil {
+			http.Error(w, fmt.Sprintf("bookid %d not found", bookid), 401)
+			return
+		}
 
 		var errmsg string
 		if r.Method == "POST" {
@@ -865,18 +888,13 @@ func createpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 				}
 
 				s := "INSERT INTO page (book_id, title, body) VALUES (?, ?, ?)"
-				result, err := sqlexec(db, s, bookid, p.Title, p.Body)
+				_, err := sqlexec(db, s, bookid, p.Title, p.Body)
 				if err != nil {
 					log.Printf("DB error creating page (%s)\n", err)
 					errmsg = "A problem occured. Please try again."
 					break
 				}
-				newid, err := result.LastInsertId()
-				if err != nil {
-					http.Redirect(w, r, "/", http.StatusSeeOther)
-					return
-				}
-				http.Redirect(w, r, createPageUrl(newid), http.StatusSeeOther)
+				http.Redirect(w, r, createPageUrl(b.Name, p.Title), http.StatusSeeOther)
 				return
 			}
 		}
@@ -886,29 +904,42 @@ func createpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		printNav(w, r, db, login, nil)
 
 		P := makeFprintf(w)
-		P("<section class=\"main\">\n")
-		P("<form class=\"simpleform mb-2xl\" method=\"post\" action=\"/createpage/\">\n")
+		P("<section class=\"container text-sm py-4 px-4\">\n")
+		P("  <section class=\"flex flex-row\">\n")
+		P("    <section class=\"widget-1\">\n")
+		if p.Title == "" {
+			P("      <h1 class=\"fg-2 mb-4\">Create Page</h1>")
+		} else {
+			P("      <h1 class=\"fg-2 mb-4\">Create Page '%s'</h1>", p.Title)
+		}
+		P("      <form class=\"mb-4\" method=\"post\" action=\"/createpage/?bookid=%d\">\n", bookid)
 		if errmsg != "" {
-			P("<div class=\"control\">\n")
-			P("<p class=\"error\">%s</p>\n", errmsg)
+			P("<div class=\"mb-2\">\n")
+			P("<p class=\"text-red-500\">%s</p>\n", errmsg)
 			P("</div>\n")
 		}
 
-		P("<div class=\"control\">\n")
-		P("<label for=\"title\">title</label>\n")
-		P("<input id=\"title\" name=\"title\" type=\"text\" size=\"60\" value=\"%s\">\n", p.Title)
+		P("<div class=\"mb-2\">\n")
+		P("<label class=\"block label-1\" for=\"title\">title</label>\n")
+		if p.Title == "" {
+			P("<input class=\"block input-1 w-full\" id=\"title\" name=\"title\" type=\"text\" size=\"60\" value=\"\">\n")
+		} else {
+			P("<input class=\"block input-1 w-full\" id=\"title\" name=\"title\" type=\"text\" size=\"60\" value=\"%s\" readonly>\n", p.Title)
+		}
 		P("</div>\n")
 
-		P("  <div class=\"control\">\n")
-		P("    <label for=\"body\">text</label>\n")
-		P("    <textarea id=\"body\" name=\"body\" rows=\"6\" cols=\"60\">%s</textarea>\n", p.Body)
+		P("  <div class=\"mb-4\">\n")
+		P("    <label class=\"block label-1\" for=\"body\">text</label>\n")
+		P("    <textarea class=\"block input-1 w-full\" id=\"body\" name=\"body\" rows=\"6\" cols=\"60\">%s</textarea>\n", p.Body)
 		P("  </div>\n")
 
-		P("  <div class=\"control\">\n")
-		P("    <button class=\"submit\">submit</button>\n")
+		P("  <div class=\"\">\n")
+		P("    <button class=\"block btn-1 text-gray-800 bg-gray-200\" type=\"submit\">submit</button>\n")
 		P("  </div>\n")
 		P("</form>\n")
 
+		P("    </section>\n")
+		P("  </section>\n")
 		P("</section>\n")
 		printFoot(w)
 	}
