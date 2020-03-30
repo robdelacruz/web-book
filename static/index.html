@@ -25,7 +25,8 @@
 </header>
 <section class="container main-container">
     <section class="flex flex-row content-start">
-        <section class="widget-1 min-h-64">
+
+        <section class="widget-1 min-h-64 mr-4">
             <article class="page w-page">
             <p>
             On the day appointed for the beginning of the race, you take the <i>Banshee</i> out of the towering granite bay of Tak and into the Inland Sea. Abdul the Butcher's <i>Haveldar</i> cuts quietly through the water beside you. Far to the east is the hostile but rich port of Lagash; to the west is the Scythera Desert, across which the caravan routes to the cities of Kish, Calah and Assur run. To the south is the mountainous isle of Enraki.
@@ -45,6 +46,33 @@
             The End
             </article>
         </section>
+
+        <section class="widget-1 h-full">
+            <form class="w-page">
+                <h1 class="fg-2 mb-4">Edit Page: 'Start Voyage'</h1>
+                <div class="mb-2">
+                    <label class="block label-1" for="title">title</label>
+                    <input class="block input-1 w-full fg-2" id="title" name="title" type="text" size="60" value="Start Voyage" readonly>
+                </div>
+
+                <div class="mb-4">
+                    <label class="block label-1" for="body">text</label>
+                    <textarea class="block input-1 w-full fg-2" id="body" name="body" rows="20">
+On the day appointed for the beginning of the race, you take the Banshee out of the towering granite bay of Tak and into the Inland Sea. Abdul the Butcher's Haveldar cuts quietly through the water beside you. Far to the east is the hostile but rich port of Lagash; to the west is the Scythera Desert, across which the caravan routes to the cities of Kish, Calah and Assur run. To the south is the mountainous isle of Enraki.
+
+Will you:
+[[lagash 1|Head towards Lagash]] for a dangerous but daring raid against its coastal shipping?
+[[scythera desert|Travel to the Scythera Desert]] to plunder the rich western caravans?
+[[Patrol the Inland Sea]] via the isle of Enraki?
+                    </textarea>
+                </div>
+
+                <div class="">
+                    <button class="block btn-1 text-gray-800 bg-gray-200" type="submit">submit</button>
+                </div>
+            </form>
+        </section>
+
     </section>
 </section>
 
