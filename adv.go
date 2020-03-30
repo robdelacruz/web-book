@@ -60,8 +60,8 @@ func main() {
 	}
 
 	//$$ translate link test
-	//body := "Now is the time for all good men to come to the aid of the party. You can decide to [[left door|take the left door]] or [[right door|the right door]]."
-	//fmt.Printf(translateLinks(body, "Space Patrol"))
+	//body := "Now is the time for all good men to come to the aid of the party. You can decide to [[left room|turn left]] or [[right room|turn right]] or [[middle room]] or [[upper room|go up]]"
+	//fmt.Printf("\n%s\n\n", translateLinks(body, "Space Patrol"))
 
 	// Need to specify a db file as first parameter.
 	if len(parms) == 0 {
@@ -850,7 +850,35 @@ func createPageUrl(bookName, pageTitle string) string {
 // "[[Texas|Lone Star State]]" => "[Lone Star State](/Texas)"
 // "[[Enterprise Bridge|Go to Captain's Bridge]]" => "[Go to Captain's Bridge](/Enterprise_Bridge)"
 func translateLinks(body, bookName string) string {
-	sre := `\[\[([\w\s/]+)\|(.+)\]\]`
+	body = translateSimpleLinks(body, bookName)
+	body = translatePipeLinks(body, bookName)
+	return body
+}
+
+func translateSimpleLinks(body, bookName string) string {
+	sre := `\[\[([\w\s/]+?)\]\]`
+	re := regexp.MustCompile(sre)
+
+	// Change wikitext links to use page link with underscores:
+	// "[[Enterprise Bridge]]" => "[[/Book_Name/Enterprise_Bridge]]"
+	var linktext string
+	body = re.ReplaceAllStringFunc(body, func(slink string) string {
+		matches := re.FindStringSubmatch(slink)
+		linktext = matches[1]
+		return fmt.Sprintf("[[/%s/%s]]", spaceToUnderscore(bookName), spaceToUnderscore(matches[1]))
+	})
+
+	// Replace wikitext link with equivalent markdown link:
+	// "[[Book_Name/Enterprise_Bridge]]" => "[Enterprise Bridge](/Book_Name/Enterprise_Bridge)"
+	body = re.ReplaceAllStringFunc(body, func(slink string) string {
+		matches := re.FindStringSubmatch(slink)
+		return fmt.Sprintf("[%s](%s)", linktext, matches[1])
+	})
+	return body
+}
+
+func translatePipeLinks(body, bookName string) string {
+	sre := `\[\[([\w\s/]+?)\|(.+?)\]\]`
 	re := regexp.MustCompile(sre)
 
 	// Change wikitext links to use page link with underscores:
