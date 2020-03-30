@@ -579,8 +579,8 @@ func loginHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		printNav(w, r, db, login, nil)
 
 		P := makeFprintf(w)
-		P("<section class=\"container text-sm py-4 px-4\">\n")
-		P("  <section class=\"flex flex-row\">\n")
+		P("<section class=\"container main-container\">\n")
+		P("  <section class=\"flex flex-row content-start\">\n")
 		P("    <section class=\"widget-1\">\n")
 		P("      <h1 class=\"fg-2 mb-4\">Login</h1>")
 		P("      <form class=\"mb-4\" action=\"/login/?from=%s\" method=\"post\">\n", qfrom)
@@ -782,7 +782,7 @@ func printBooksMenu(w http.ResponseWriter, r *http.Request, db *sql.DB, login *U
 	printNav(w, r, db, login, nil)
 
 	P := makeFprintf(w)
-	P("<section class=\"container text-sm py-4 px-4\">\n")
+	P("<section class=\"container main-container\">\n")
 	P("  <section class=\"flex flex-row content-start\">\n")
 	P("    <section class=\"widget-1 min-h-64\">\n")
 	P("      <article class=\"w-page\">\n")
@@ -816,7 +816,7 @@ func printPage(w http.ResponseWriter, r *http.Request, db *sql.DB, login *User, 
 	printNav(w, r, db, login, nil)
 
 	P := makeFprintf(w)
-	P("<section class=\"container text-sm py-4 px-4\">\n")
+	P("<section class=\"container main-container\">\n")
 	P("  <section class=\"flex flex-row content-start\">\n")
 	P("    <section class=\"widget-1 min-h-64\">\n")
 
@@ -922,15 +922,15 @@ func createpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		printNav(w, r, db, login, b)
 
 		P := makeFprintf(w)
-		P("<section class=\"container text-sm py-4 px-4\">\n")
-		P("  <section class=\"flex flex-row\">\n")
+		P("<section class=\"container main-container\">\n")
+		P("  <section class=\"flex flex-row content-start\">\n")
 		P("    <section class=\"widget-1\">\n")
+		P("      <form class=\"w-page mb-4\" method=\"post\" action=\"/createpage/?bookid=%d\">\n", bookid)
 		if p.Title == "" {
 			P("      <h1 class=\"fg-2 mb-4\">Create Page</h1>")
 		} else {
 			P("      <h1 class=\"fg-2 mb-4\">Create Page '%s'</h1>", p.Title)
 		}
-		P("      <form class=\"w-page mb-4\" method=\"post\" action=\"/createpage/?bookid=%d\">\n", bookid)
 		if errmsg != "" {
 			P("<div class=\"mb-2\">\n")
 			P("<p class=\"text-red-500\">%s</p>\n", errmsg)
