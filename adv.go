@@ -105,6 +105,7 @@ Initialize new book file:
 	http.HandleFunc("/createpage/", createpageHandler(db))
 	http.HandleFunc("/editpage/", editpageHandler(db))
 	http.HandleFunc("/createbook/", createbookHandler(db))
+	http.HandleFunc("/editbook/", editbookHandler(db))
 	port := "8000"
 	fmt.Printf("Listening on %s...\n", port)
 	err = http.ListenAndServe(fmt.Sprintf(":%s", port), nil)
@@ -803,7 +804,12 @@ func printBooksMenu(w http.ResponseWriter, r *http.Request, db *sql.DB, login *U
 	for rows.Next() {
 		rows.Scan(&b.Bookid, &b.Name, &b.Desc)
 		P("<div class=\"ml-2 mb-2\">\n")
-		P("  <a class=\"block link-1 no-underline\" href=\"/%s\">%s</a>\n", spaceToUnderscore(b.Name), b.Name)
+		P("  <div class=\"flex flex-row justify-between\">\n")
+		P("    <a class=\"block link-1 no-underline text-base\" href=\"/%s\">%s</a>\n", spaceToUnderscore(b.Name), b.Name)
+		if login.Userid == ADMIN_ID {
+			P("    <a class=\"block link-2 text-xs\" href=\"/editbook?bookid=%d\">Edit</a>\n", b.Bookid)
+		}
+		P("  </div>\n")
 		if b.Desc != "" {
 			P("  <div class=\"text-xs fg-2\">\n")
 			P(parseMarkdown(b.Desc))
@@ -1147,6 +1153,86 @@ func createbookHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		P("    <section class=\"widget-1\">\n")
 		P("      <form class=\"w-page mb-4\" method=\"post\" action=\"/createbook/\">\n")
 		P("      <h1 class=\"fg-2 mb-4\">Create Book</h1>")
+		if errmsg != "" {
+			P("<div class=\"mb-2\">\n")
+			P("<p class=\"text-red-500\">%s</p>\n", errmsg)
+			P("</div>\n")
+		}
+
+		P("  <div class=\"mb-2\">\n")
+		P("    <label class=\"block label-1\" for=\"name\">name</label>\n")
+		P("    <input class=\"block input-1 w-full\" id=\"name\" name=\"name\" type=\"text\" size=\"60\" value=\"%s\">\n", b.Name)
+		P("  </div>\n")
+
+		P("  <div class=\"mb-4\">\n")
+		P("    <label class=\"block label-1\" for=\"desc\">description</label>\n")
+		P("    <textarea class=\"block input-1 w-full\" id=\"desc\" name=\"desc\" rows=\"10\">%s</textarea>\n", b.Desc)
+		P("  </div>\n")
+
+		P("  <div class=\"\">\n")
+		P("    <button class=\"block btn-1 text-gray-800 bg-gray-200\" type=\"submit\">submit</button>\n")
+		P("  </div>\n")
+		P("</form>\n")
+
+		P("    </section>\n")
+		P("  </section>\n")
+		P("</section>\n")
+		printFoot(w)
+	}
+}
+
+func editbookHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		login := getLoginUser(r, db)
+		if login.Userid != ADMIN_ID {
+			http.Error(w, "admin user required", 401)
+			return
+		}
+
+		bookid := idtoi(r.FormValue("bookid"))
+		if bookid == -1 {
+			http.Error(w, "bookid required", 401)
+			return
+		}
+		b := queryBook(db, bookid)
+		if b == nil {
+			http.Error(w, fmt.Sprintf("bookid %d not found", bookid), 401)
+			return
+		}
+
+		var errmsg string
+		if r.Method == "POST" {
+			b.Name = strings.TrimSpace(r.FormValue("name"))
+			b.Desc = strings.TrimSpace(r.FormValue("desc"))
+			for {
+				if b.Name == "" {
+					errmsg = "Please enter a book name."
+					break
+				}
+
+				var err error
+				s := "UPDATE book SET name = ?, desc = ? WHERE book_id = ?"
+				_, err = sqlexec(db, s, b.Name, b.Desc, b.Bookid)
+				if err != nil {
+					log.Printf("DB error saving book (%s)\n", err)
+					errmsg = "A problem occured. Please try again."
+					break
+				}
+				http.Redirect(w, r, "/", http.StatusSeeOther)
+				return
+			}
+		}
+
+		w.Header().Set("Content-Type", "text/html")
+		printHead(w, nil, nil)
+		printNav(w, r, db, login, nil)
+
+		P := makeFprintf(w)
+		P("<section class=\"container main-container\">\n")
+		P("  <section class=\"flex flex-row content-start\">\n")
+		P("    <section class=\"widget-1\">\n")
+		P("      <form class=\"w-page mb-4\" method=\"post\" action=\"/editbook/?bookid=%d\">\n", bookid)
+		P("      <h1 class=\"fg-2 mb-4\">Edit Book</h1>")
 		if errmsg != "" {
 			P("<div class=\"mb-2\">\n")
 			P("<p class=\"text-red-500\">%s</p>\n", errmsg)
