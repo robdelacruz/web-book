@@ -23,8 +23,10 @@
 */
 
 .bg-1 {@apply bg-gray-800;}
+.bg-3 {@apply bg-gray-200;}
 .fg-1 {@apply text-green-300;}
 .fg-2 {@apply text-gray-200;}
+.fg-3 {@apply text-gray-800;}
 .border-color-1 {@apply border-gray-500;}
 .bgfg-1 {@apply bg-1 fg-1;}
 
@@ -38,6 +40,7 @@
 .btn-1 {@apply mx-auto rounded py-1 px-2;} 
 
 .w-page {width: 400px;}
+.w-menu {width: 150px;}
 .page p, .page ul {@apply mb-2;}
 .page a {@apply link-1;}
 
