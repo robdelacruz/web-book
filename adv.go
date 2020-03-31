@@ -34,6 +34,7 @@ type Site struct {
 type Book struct {
 	Bookid int64
 	Name   string
+	Desc   string
 }
 
 type Page struct {
@@ -103,6 +104,7 @@ Initialize new book file:
 	http.HandleFunc("/", indexHandler(db))
 	http.HandleFunc("/createpage/", createpageHandler(db))
 	http.HandleFunc("/editpage/", editpageHandler(db))
+	http.HandleFunc("/createbook/", createbookHandler(db))
 	port := "8000"
 	fmt.Printf("Listening on %s...\n", port)
 	err = http.ListenAndServe(fmt.Sprintf(":%s", port), nil)
@@ -232,12 +234,15 @@ func createAndInitTables(newfile string) {
 
 	ss := []string{
 		"BEGIN TRANSACTION;",
-		"CREATE TABLE book (book_id INTEGER PRIMARY KEY NOT NULL, name TEXT);",
+		"CREATE TABLE book (book_id INTEGER PRIMARY KEY NOT NULL, name TEXT, desc TEXT);",
 		"CREATE TABLE page (page_id INTEGER PRIMARY KEY NOT NULL, book_id INTEGER NOT NULL, title TEXT, body TEXT);",
 		"CREATE TABLE user (user_id INTEGER PRIMARY KEY NOT NULL, username TEXT, password TEXT, active INTEGER NOT NULL, email TEXT, CONSTRAINT unique_username UNIQUE (username));",
 		"INSERT INTO user (user_id, username, password, active, email) VALUES (1, 'admin', '', 1, '');",
-		"INSERT INTO book (book_id, name) VALUES (1, 'ABC Quest');",
-		"INSERT INTO book (book_id, name) VALUES (2, 'A Normal Day Adventure');",
+		"INSERT INTO book (book_id, name, desc) VALUES (1, 'Sesame Street Adventure', 'Join your favorite characters - Oscar the Grouch, Big Bird, Snuffleupagus, and Mr. Hooper on a gritty, urban adventure through the mean streets of Sesame Street.');",
+		"INSERT INTO book (book_id, name, desc) VALUES (2, 'Escape', 'Based on the original *Escape* book by R.A. Montgomery from the Choose Your Own Adventure Books series. You''re the star of the story, choose from 27 possible endings.');",
+		"INSERT INTO book (book_id, name, desc) VALUES (3, 'Space Patrol', 'You are the commander of Space Rescue Emergency Vessel III. You have spent almost six months alone in space, and your only companion is your computer, Henry. You are steering your ship through a meteorite shower when an urgent signal comes from headquarters- a ship in your sector is under attack by space pirates!');",
+		"INSERT INTO book (book_id, name, desc) VALUES (4, 'Prisoner of the Ant People', 'R. A. Montgomery takes YOU on an otherworldly adventure as you fight off the the feared Ant People, who have recently joined forces with the Evil Power Master.');",
+		"INSERT INTO book (book_id, name, desc) VALUES (5, 'War with the Evil Power Master', 'You are the commander of the Lacoonian System Rapid Force response team, in charge of protecting all planets in the System. You learn that the Evil Power Master has zeroed in on three planets and plans to destroy them. The safety of the Lacoonian System depends on you!');",
 		"COMMIT;",
 	}
 
@@ -383,9 +388,9 @@ func queryBook(db *sql.DB, bookid int64) *Book {
 	var b Book
 	b.Bookid = -1
 
-	s := "SELECT book_id, name FROM book WHERE book_id = ?"
+	s := "SELECT book_id, name, desc FROM book WHERE book_id = ?"
 	row := db.QueryRow(s, bookid)
-	err := row.Scan(&b.Bookid, &b.Name)
+	err := row.Scan(&b.Bookid, &b.Name, &b.Desc)
 	if err == sql.ErrNoRows {
 		return nil
 		return &b
@@ -399,9 +404,9 @@ func queryBook(db *sql.DB, bookid int64) *Book {
 
 func queryBookName(db *sql.DB, name string) *Book {
 	var b Book
-	s := "SELECT book_id, name FROM book WHERE name = ?"
+	s := "SELECT book_id, name, desc FROM book WHERE name = ?"
 	row := db.QueryRow(s, name)
-	err := row.Scan(&b.Bookid, &b.Name)
+	err := row.Scan(&b.Bookid, &b.Name, &b.Desc)
 	if err == sql.ErrNoRows {
 		return nil
 	}
@@ -734,7 +739,7 @@ func createaccountHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 func parseBookPageUrl(url string) (string, string) {
 	var bookName, pageName string
 
-	sre := `^/(\w+)(?:/(\w*))?/?$`
+	sre := `^/(.+?)(?:/(.*?))?/?$`
 	re := regexp.MustCompile(sre)
 	matches := re.FindStringSubmatch(url)
 	if matches == nil {
@@ -789,15 +794,22 @@ func printBooksMenu(w http.ResponseWriter, r *http.Request, db *sql.DB, login *U
 	P("      <article class=\"w-page flex-grow\">\n")
 	P("        <h1 class=\"fg-2 mb-4\">Select Book:</h1>\n")
 
-	s := "SELECT book_id, name FROM book ORDER BY book_id"
+	s := "SELECT book_id, name, desc FROM book ORDER BY book_id"
 	rows, err := db.Query(s)
 	if handleDbErr(w, err, "indexhandler") {
 		return
 	}
 	var b Book
 	for rows.Next() {
-		rows.Scan(&b.Bookid, &b.Name)
-		P("<a class=\"block link-1 no-underline ml-2 mb-2\" href=\"/%s\">%s</a>\n", spaceToUnderscore(b.Name), b.Name)
+		rows.Scan(&b.Bookid, &b.Name, &b.Desc)
+		P("<div class=\"ml-2 mb-2\">\n")
+		P("  <a class=\"block link-1 no-underline\" href=\"/%s\">%s</a>\n", spaceToUnderscore(b.Name), b.Name)
+		if b.Desc != "" {
+			P("  <div class=\"text-xs fg-2\">\n")
+			P(parseMarkdown(b.Desc))
+			P("  </div>\n")
+		}
+		P("</div>\n")
 	}
 	P("      </article>\n")
 
@@ -939,10 +951,6 @@ func createpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 
 		var errmsg string
 		if r.Method == "POST" {
-			if !validateLogin(w, login) {
-				return
-			}
-
 			p.Body = strings.TrimSpace(r.FormValue("body"))
 			for {
 				if p.Body == "" {
@@ -979,10 +987,10 @@ func createpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 			P("</div>\n")
 		}
 
-		P("<div class=\"mb-2\">\n")
-		P("  <label class=\"block label-1\" for=\"title\">title</label>\n")
-		P("  <input class=\"block input-1 w-full\" id=\"title\" name=\"title\" type=\"text\" size=\"60\" value=\"%s\" readonly>\n", p.Title)
-		P("</div>\n")
+		P("  <div class=\"mb-2\">\n")
+		P("    <label class=\"block label-1\" for=\"title\">title</label>\n")
+		P("    <input class=\"block input-1 w-full\" id=\"title\" name=\"title\" type=\"text\" size=\"60\" value=\"%s\" readonly>\n", p.Title)
+		P("  </div>\n")
 
 		P("  <div class=\"mb-4\">\n")
 		P("    <label class=\"block label-1\" for=\"body\">text</label>\n")
@@ -1033,10 +1041,6 @@ func editpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 
 		var errmsg string
 		if r.Method == "POST" {
-			if !validateLogin(w, login) {
-				return
-			}
-
 			p.Title = strings.TrimSpace(r.FormValue("title"))
 			p.Body = strings.TrimSpace(r.FormValue("body"))
 			for {
@@ -1078,14 +1082,85 @@ func editpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 			P("</div>\n")
 		}
 
-		P("<div class=\"mb-2\">\n")
-		P("  <label class=\"block label-1\" for=\"title\">title</label>\n")
-		P("  <input class=\"block input-1 w-full\" id=\"title\" name=\"title\" type=\"text\" size=\"60\" value=\"%s\" readonly>\n", p.Title)
-		P("</div>\n")
+		P("  <div class=\"mb-2\">\n")
+		P("    <label class=\"block label-1\" for=\"title\">title</label>\n")
+		P("    <input class=\"block input-1 w-full\" id=\"title\" name=\"title\" type=\"text\" size=\"60\" value=\"%s\" readonly>\n", p.Title)
+		P("  </div>\n")
 
 		P("  <div class=\"mb-4\">\n")
 		P("    <label class=\"block label-1\" for=\"body\">text</label>\n")
 		P("    <textarea class=\"block input-1 w-full\" id=\"body\" name=\"body\" rows=\"15\">%s</textarea>\n", p.Body)
+		P("  </div>\n")
+
+		P("  <div class=\"\">\n")
+		P("    <button class=\"block btn-1 text-gray-800 bg-gray-200\" type=\"submit\">submit</button>\n")
+		P("  </div>\n")
+		P("</form>\n")
+
+		P("    </section>\n")
+		P("  </section>\n")
+		P("</section>\n")
+		printFoot(w)
+	}
+}
+
+func createbookHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var b Book
+
+		login := getLoginUser(r, db)
+		if login.Userid != ADMIN_ID {
+			http.Error(w, "admin user required", 401)
+			return
+		}
+
+		var errmsg string
+		if r.Method == "POST" {
+			b.Name = strings.TrimSpace(r.FormValue("name"))
+			b.Desc = strings.TrimSpace(r.FormValue("desc"))
+			for {
+				if b.Name == "" {
+					errmsg = "Please enter a book name."
+					break
+				}
+
+				var err error
+				s := "INSERT INTO book (name, desc) VALUES (?, ?)"
+				_, err = sqlexec(db, s, b.Name, b.Desc)
+				if err != nil {
+					log.Printf("DB error saving book (%s)\n", err)
+					errmsg = "A problem occured. Please try again."
+					break
+				}
+				http.Redirect(w, r, pageUrl(b.Name, ""), http.StatusSeeOther)
+				return
+			}
+		}
+
+		w.Header().Set("Content-Type", "text/html")
+		printHead(w, nil, nil)
+		printNav(w, r, db, login, nil)
+
+		P := makeFprintf(w)
+		P("<section class=\"container main-container\">\n")
+		P("  <section class=\"flex flex-row content-start\">\n")
+		P("    <section class=\"widget-1\">\n")
+		P("      <form class=\"w-page mb-4\" method=\"post\" action=\"/createbook/\">\n")
+		P("      <h1 class=\"fg-2 mb-4\">Create Book</h1>")
+		if errmsg != "" {
+			P("<div class=\"mb-2\">\n")
+			P("<p class=\"text-red-500\">%s</p>\n", errmsg)
+			P("</div>\n")
+		}
+
+		P("  <div class=\"mb-2\">\n")
+		P("    <label class=\"block label-1\" for=\"name\">name</label>\n")
+		P("    <input class=\"block input-1 w-full\" id=\"name\" name=\"name\" type=\"text\" size=\"60\" value=\"%s\">\n", b.Name)
+		P("  </div>\n")
+
+		P("  <div class=\"mb-4\">\n")
+		P("    <label class=\"block label-1\" for=\"desc\">description</label>\n")
+		P("    <textarea class=\"block input-1 w-full\" id=\"desc\" name=\"desc\" rows=\"10\">%s</textarea>\n", b.Desc)
 		P("  </div>\n")
 
 		P("  <div class=\"\">\n")
