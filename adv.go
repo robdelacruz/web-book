@@ -741,12 +741,12 @@ func createaccountHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 	}
 }
 
-func parseBookPageUrl(url string) (string, string) {
+func parseBookPageUrl(surl string) (string, string) {
 	var bookName, pageName string
 
 	sre := `^/(.+?)(?:/(.*?))?/?$`
 	re := regexp.MustCompile(sre)
-	matches := re.FindStringSubmatch(url)
+	matches := re.FindStringSubmatch(surl)
 	if matches == nil {
 		return bookName, pageName
 	}
@@ -754,6 +754,7 @@ func parseBookPageUrl(url string) (string, string) {
 	if len(matches) > 2 {
 		pageName = matches[2]
 	}
+
 	return underscoreToSpace(bookName), underscoreToSpace(pageName)
 }
 
@@ -809,7 +810,7 @@ func printBooksMenu(w http.ResponseWriter, r *http.Request, db *sql.DB, login *U
 		rows.Scan(&b.Bookid, &b.Name, &b.Desc)
 		P("<div class=\"ml-2 mb-4\">\n")
 		P("  <div class=\"flex flex-row justify-between\">\n")
-		P("    <a class=\"block link-1 no-underline text-base\" href=\"/%s\">%s</a>\n", spaceToUnderscore(b.Name), b.Name)
+		P("    <a class=\"block link-1 no-underline text-base\" href=\"%s\">%s</a>\n", pageUrl(b.Name, ""), b.Name)
 		if login.Userid == ADMIN_ID {
 			P("    <a class=\"block link-2 text-xs\" href=\"/editbook?bookid=%d\">Edit</a>\n", b.Bookid)
 		}
@@ -880,8 +881,12 @@ func printPage(w http.ResponseWriter, r *http.Request, db *sql.DB, login *User, 
 	printFoot(w)
 }
 
+func bookUrl(bookName string) string {
+	return fmt.Sprintf("/%s", url.QueryEscape(spaceToUnderscore(bookName)))
+}
+
 func pageUrl(bookName, pageTitle string) string {
-	return fmt.Sprintf("/%s/%s", spaceToUnderscore(bookName), spaceToUnderscore(pageTitle))
+	return fmt.Sprintf("/%s/%s", url.QueryEscape(spaceToUnderscore(bookName)), url.QueryEscape(spaceToUnderscore(pageTitle)))
 }
 
 // Translate wikitext links into markdown links.
@@ -900,7 +905,7 @@ func translateSimpleLinks(body, bookName string) string {
 	// "[[Enterprise Bridge]]" => "[Enterprise Bridge](/Book_Name/Enterprise_Bridge)"
 	body = re.ReplaceAllStringFunc(body, func(slink string) string {
 		matches := re.FindStringSubmatch(slink)
-		return fmt.Sprintf("[%s](/%s/%s)", matches[1], spaceToUnderscore(bookName), spaceToUnderscore(matches[1]))
+		return fmt.Sprintf("[%s](%s)", matches[1], pageUrl(bookName, matches[1]))
 	})
 	return body
 }
@@ -912,7 +917,7 @@ func translatePipeLinks(body, bookName string) string {
 	// "[[Enterprise Bridge|Go to bridge]]" => "[Go to bridge](/Book_Name/Enterprise_Bridge)"
 	body = re.ReplaceAllStringFunc(body, func(slink string) string {
 		matches := re.FindStringSubmatch(slink)
-		return fmt.Sprintf("[%s](/%s/%s)", matches[2], spaceToUnderscore(bookName), spaceToUnderscore(matches[1]))
+		return fmt.Sprintf("[%s](%s)", matches[2], pageUrl(bookName, matches[1]))
 	})
 	return body
 }
@@ -924,10 +929,14 @@ func parseMarkdown(s string) string {
 func createpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var p Page
+		var err error
 
 		login := getLoginUser(r, db)
 		bookid := idtoi(r.FormValue("bookid"))
-		p.Title = strings.TrimSpace(r.FormValue("title"))
+		p.Title, err = url.QueryUnescape(strings.TrimSpace(r.FormValue("title")))
+		if err != nil {
+			p.Title = strings.TrimSpace(r.FormValue("title"))
+		}
 
 		if login.Userid != ADMIN_ID {
 			http.Error(w, "admin user required", 401)
@@ -977,7 +986,7 @@ func createpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		P("<section class=\"container main-container\">\n")
 		P("  <section class=\"flex flex-row content-start\">\n")
 		P("    <section class=\"widget-1 p-4\">\n")
-		P("      <form class=\"w-page\" method=\"post\" action=\"/createpage/?bookid=%d&title=%s\">\n", bookid, url.QueryEscape(p.Title))
+		P("      <form class=\"w-editpage\" method=\"post\" action=\"/createpage/?bookid=%d&title=%s\">\n", bookid, url.QueryEscape(p.Title))
 		P("      <h1 class=\"fg-1 mb-4\">Create Page '%s'</h1>", p.Title)
 		if errmsg != "" {
 			P("<div class=\"mb-2\">\n")
@@ -1072,7 +1081,7 @@ func editpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		P("<section class=\"container main-container\">\n")
 		P("  <section class=\"flex flex-row content-start\">\n")
 		P("    <section class=\"widget-1 p-4\">\n")
-		P("      <form class=\"w-page\" method=\"post\" action=\"/editpage/?bookid=%d&pageid=%d\">\n", bookid, pageid)
+		P("      <form class=\"w-editpage\" method=\"post\" action=\"/editpage/?bookid=%d&pageid=%d\">\n", bookid, pageid)
 		P("      <h1 class=\"fg-1 mb-4\">Edit Page '%s'</h1>", p.Title)
 		if errmsg != "" {
 			P("<div class=\"mb-2\">\n")
@@ -1143,7 +1152,7 @@ func createbookHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		P("<section class=\"container main-container\">\n")
 		P("  <section class=\"flex flex-row content-start\">\n")
 		P("    <section class=\"widget-1 p-4\">\n")
-		P("      <form class=\"w-page mb-4\" method=\"post\" action=\"/createbook/\">\n")
+		P("      <form class=\"w-editpage mb-4\" method=\"post\" action=\"/createbook/\">\n")
 		P("      <h1 class=\"fg-1 mb-4\">Create Book</h1>")
 		if errmsg != "" {
 			P("<div class=\"mb-2\">\n")
@@ -1223,7 +1232,7 @@ func editbookHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		P("<section class=\"container main-container\">\n")
 		P("  <section class=\"flex flex-row content-start\">\n")
 		P("    <section class=\"widget-1 p-4\">\n")
-		P("      <form class=\"w-page mb-4\" method=\"post\" action=\"/editbook/?bookid=%d\">\n", bookid)
+		P("      <form class=\"w-editpage mb-4\" method=\"post\" action=\"/editbook/?bookid=%d\">\n", bookid)
 		P("      <h1 class=\"fg-1 mb-4\">Edit Book</h1>")
 		if errmsg != "" {
 			P("<div class=\"mb-2\">\n")

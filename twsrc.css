@@ -40,9 +40,10 @@
 .btn-1 {@apply mx-auto rounded py-1 px-2;} 
 
 .w-page {width: 400px;}
-.w-menu {width: 150px;}
 .page p, .page ul {@apply mb-2;}
 .page a {@apply link-1;}
+
+.w-editpage {width: 600px;}
 
 @tailwind utilities;
 
