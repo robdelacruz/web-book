@@ -791,8 +791,8 @@ func printBooksMenu(w http.ResponseWriter, r *http.Request, db *sql.DB, login *U
 	P := makeFprintf(w)
 	P("<section class=\"container main-container\">\n")
 	P("  <section class=\"flex flex-row content-start\">\n")
-	P("    <section class=\"widget-1 min-h-64 flex flex-col\">\n")
-	P("      <article class=\"w-page flex-grow\">\n")
+	P("    <section class=\"widget-1 min-h-64 flex flex-col py-4 px-8\">\n")
+	P("      <article class=\"w-page flex-grow mb-4\">\n")
 	P("        <h1 class=\"fg-1 mb-4\">Select Book:</h1>\n")
 
 	s := "SELECT book_id, name, desc FROM book ORDER BY book_id"
@@ -803,7 +803,7 @@ func printBooksMenu(w http.ResponseWriter, r *http.Request, db *sql.DB, login *U
 	var b Book
 	for rows.Next() {
 		rows.Scan(&b.Bookid, &b.Name, &b.Desc)
-		P("<div class=\"ml-2 mb-2\">\n")
+		P("<div class=\"ml-2 mb-4\">\n")
 		P("  <div class=\"flex flex-row justify-between\">\n")
 		P("    <a class=\"block link-1 no-underline text-base\" href=\"/%s\">%s</a>\n", spaceToUnderscore(b.Name), b.Name)
 		if login.Userid == ADMIN_ID {
@@ -846,8 +846,8 @@ func printPage(w http.ResponseWriter, r *http.Request, db *sql.DB, login *User, 
 	P := makeFprintf(w)
 	P("<section class=\"container main-container\">\n")
 	P("  <section class=\"flex flex-row content-start\">\n")
-	P("    <section class=\"widget-1 min-h-64 flex flex-col\">\n")
-	P("      <article class=\"page w-page flex-grow\">\n")
+	P("    <section class=\"widget-1 min-h-64 flex flex-col py-4 px-8\">\n")
+	P("      <article class=\"page w-page flex-grow mb-4\">\n")
 	p := queryPageName(db, b.Bookid, pageTitle)
 	if p == nil {
 		P("<h1 class=\"fg-1 mb-4\">Page Not Found</h1>\n")
@@ -984,8 +984,8 @@ func createpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		P := makeFprintf(w)
 		P("<section class=\"container main-container\">\n")
 		P("  <section class=\"flex flex-row content-start\">\n")
-		P("    <section class=\"widget-1\">\n")
-		P("      <form class=\"w-page mb-4\" method=\"post\" action=\"/createpage/?bookid=%d&title=%s\">\n", bookid, url.QueryEscape(p.Title))
+		P("    <section class=\"widget-1 p-4\">\n")
+		P("      <form class=\"w-page\" method=\"post\" action=\"/createpage/?bookid=%d&title=%s\">\n", bookid, url.QueryEscape(p.Title))
 		P("      <h1 class=\"fg-1 mb-4\">Create Page '%s'</h1>", p.Title)
 		if errmsg != "" {
 			P("<div class=\"mb-2\">\n")
@@ -1079,8 +1079,8 @@ func editpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		P := makeFprintf(w)
 		P("<section class=\"container main-container\">\n")
 		P("  <section class=\"flex flex-row content-start\">\n")
-		P("    <section class=\"widget-1\">\n")
-		P("      <form class=\"w-page mb-4\" method=\"post\" action=\"/editpage/?bookid=%d&pageid=%d\">\n", bookid, pageid)
+		P("    <section class=\"widget-1 p-4\">\n")
+		P("      <form class=\"w-page\" method=\"post\" action=\"/editpage/?bookid=%d&pageid=%d\">\n", bookid, pageid)
 		P("      <h1 class=\"fg-1 mb-4\">Edit Page '%s'</h1>", p.Title)
 		if errmsg != "" {
 			P("<div class=\"mb-2\">\n")
@@ -1150,7 +1150,7 @@ func createbookHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		P := makeFprintf(w)
 		P("<section class=\"container main-container\">\n")
 		P("  <section class=\"flex flex-row content-start\">\n")
-		P("    <section class=\"widget-1\">\n")
+		P("    <section class=\"widget-1 p-4\">\n")
 		P("      <form class=\"w-page mb-4\" method=\"post\" action=\"/createbook/\">\n")
 		P("      <h1 class=\"fg-1 mb-4\">Create Book</h1>")
 		if errmsg != "" {
@@ -1230,7 +1230,7 @@ func editbookHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		P := makeFprintf(w)
 		P("<section class=\"container main-container\">\n")
 		P("  <section class=\"flex flex-row content-start\">\n")
-		P("    <section class=\"widget-1\">\n")
+		P("    <section class=\"widget-1 p-4\">\n")
 		P("      <form class=\"w-page mb-4\" method=\"post\" action=\"/editbook/?bookid=%d\">\n", bookid)
 		P("      <h1 class=\"fg-1 mb-4\">Edit Book</h1>")
 		if errmsg != "" {

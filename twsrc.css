@@ -34,7 +34,7 @@
 .link-2 {@apply underline text-gray-200;}
 
 .main-container {@apply text-sm py-4 px-4;}
-.widget-1 {@apply bgfg-1 p-4 rounded-lg shadow-lg;}
+.widget-1 {@apply bgfg-1 rounded-lg shadow-lg;}
 .label-1 {@apply fg-1;} 
 .input-1 {@apply border border-color-1 rounded py-1 px-2 bg-1 fg-1;}
 .btn-1 {@apply mx-auto rounded py-1 px-2;} 
