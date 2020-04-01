@@ -816,7 +816,7 @@ func printBooksMenu(w http.ResponseWriter, r *http.Request, db *sql.DB, login *U
 		P("  </div>\n")
 		if b.Desc != "" {
 			P("  <div class=\"text-xs fg-1\">\n")
-			P(parseMarkdown(b.Desc))
+			P("%s\n", parseMarkdown(b.Desc))
 			P("  </div>\n")
 		}
 		P("</div>\n")
@@ -857,7 +857,7 @@ func printPage(w http.ResponseWriter, r *http.Request, db *sql.DB, login *User, 
 		P("<h1 class=\"fg-1 mb-4\">Page Not Found</h1>\n")
 	} else {
 		p.Body = translateLinks(p.Body, b.Name)
-		P(parseMarkdown(p.Body))
+		P("%s\n", parseMarkdown(p.Body))
 	}
 	P("      </article>\n")
 
@@ -894,21 +894,14 @@ func translateLinks(body, bookName string) string {
 }
 
 func translateSimpleLinks(body, bookName string) string {
-	sre := `\[\[(.+?)\]\]`
+	sre := `\[\[([^|]+?)\]\]`
 	re := regexp.MustCompile(sre)
 
-	// Change wikitext links to use page link with underscores:
-	// "[[Enterprise Bridge]]" => "{{/Book_Name/Enterprise_Bridge|Enterprise Bridge}}"
+	// "[[Enterprise Bridge]]" => "[Enterprise Bridge](/Book_Name/Enterprise_Bridge)"
 	body = re.ReplaceAllStringFunc(body, func(slink string) string {
 		matches := re.FindStringSubmatch(slink)
-		return fmt.Sprintf("{{/%s/%s|%s}}", spaceToUnderscore(bookName), spaceToUnderscore(matches[1]), matches[1])
+		return fmt.Sprintf("[%s](/%s/%s)", matches[1], spaceToUnderscore(bookName), spaceToUnderscore(matches[1]))
 	})
-
-	// Replace wikitext link with equivalent markdown link:
-	// "{{/Book_Name/Enterprise_Bridge|Enterprise Bridge}}" => "[Enterprise Bridge](/Book_Name/Enterprise_Bridge)"
-	sre = `\{\{(.+?)\|(.+?)\}\}`
-	re = regexp.MustCompile(sre)
-	body = re.ReplaceAllString(body, "[$2]($1)")
 	return body
 }
 
@@ -916,16 +909,11 @@ func translatePipeLinks(body, bookName string) string {
 	sre := `\[\[(.+?)\|(.+?)\]\]`
 	re := regexp.MustCompile(sre)
 
-	// Change wikitext links to use page link with underscores:
-	// "[[Enterprise Bridge|Go to bridge]]" => "[[/Book_Name/Enterprise_Bridge|Go to bridge]]"
+	// "[[Enterprise Bridge|Go to bridge]]" => "[Go to bridge](/Book_Name/Enterprise_Bridge)"
 	body = re.ReplaceAllStringFunc(body, func(slink string) string {
 		matches := re.FindStringSubmatch(slink)
-		return fmt.Sprintf("[[/%s/%s|%s]]", spaceToUnderscore(bookName), spaceToUnderscore(matches[1]), matches[2])
+		return fmt.Sprintf("[%s](/%s/%s)", matches[2], spaceToUnderscore(bookName), spaceToUnderscore(matches[1]))
 	})
-
-	// Replace wikitext link with equivalent markdown link:
-	// "[[/Book_Name/Enterprise_Bridge|Go to bridge]]" => "[Go to bridge](/Book_Name/Enterprise_Bridge)"
-	body = re.ReplaceAllString(body, "[$2]($1)")
 	return body
 }
 
