@@ -24,8 +24,8 @@
 
 .bg-1 {@apply bg-gray-800;}
 .bg-3 {@apply bg-gray-200;}
-.fg-1 {@apply text-green-300;}
-.fg-2 {@apply text-gray-200;}
+.fg-1 {@apply text-gray-200;}
+.fg-2 {@apply text-green-300;}
 .fg-3 {@apply text-gray-800;}
 .border-color-1 {@apply border-gray-500;}
 .bgfg-1 {@apply bg-1 fg-1;}
@@ -35,7 +35,7 @@
 
 .main-container {@apply text-sm py-4 px-4;}
 .widget-1 {@apply bgfg-1 p-4 rounded-lg shadow-lg;}
-.label-1 {@apply fg-2;} 
+.label-1 {@apply fg-1;} 
 .input-1 {@apply border border-color-1 rounded py-1 px-2 bg-1 fg-1;}
 .btn-1 {@apply mx-auto rounded py-1 px-2;} 
 

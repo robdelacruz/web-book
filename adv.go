@@ -589,7 +589,7 @@ func loginHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		P("<section class=\"container main-container\">\n")
 		P("  <section class=\"flex flex-row content-start\">\n")
 		P("    <section class=\"widget-1\">\n")
-		P("      <h1 class=\"fg-2 mb-4\">Login</h1>")
+		P("      <h1 class=\"fg-1 mb-4\">Login</h1>")
 		P("      <form class=\"mb-4\" action=\"/login/?from=%s\" method=\"post\">\n", qfrom)
 		if errmsg != "" {
 			P("    <div class=\"mb-2\">\n")
@@ -793,7 +793,7 @@ func printBooksMenu(w http.ResponseWriter, r *http.Request, db *sql.DB, login *U
 	P("  <section class=\"flex flex-row content-start\">\n")
 	P("    <section class=\"widget-1 min-h-64 flex flex-col\">\n")
 	P("      <article class=\"w-page flex-grow\">\n")
-	P("        <h1 class=\"fg-2 mb-4\">Select Book:</h1>\n")
+	P("        <h1 class=\"fg-1 mb-4\">Select Book:</h1>\n")
 
 	s := "SELECT book_id, name, desc FROM book ORDER BY book_id"
 	rows, err := db.Query(s)
@@ -811,7 +811,7 @@ func printBooksMenu(w http.ResponseWriter, r *http.Request, db *sql.DB, login *U
 		}
 		P("  </div>\n")
 		if b.Desc != "" {
-			P("  <div class=\"text-xs fg-2\">\n")
+			P("  <div class=\"text-xs fg-1\">\n")
 			P(parseMarkdown(b.Desc))
 			P("  </div>\n")
 		}
@@ -850,7 +850,7 @@ func printPage(w http.ResponseWriter, r *http.Request, db *sql.DB, login *User, 
 	P("      <article class=\"page w-page flex-grow\">\n")
 	p := queryPageName(db, b.Bookid, pageTitle)
 	if p == nil {
-		P("<h1 class=\"fg-2 mb-4\">Page Not Found</h1>\n")
+		P("<h1 class=\"fg-1 mb-4\">Page Not Found</h1>\n")
 	} else {
 		p.Body = translateLinks(p.Body, b.Name)
 		P(parseMarkdown(p.Body))
@@ -890,7 +890,7 @@ func translateLinks(body, bookName string) string {
 }
 
 func translateSimpleLinks(body, bookName string) string {
-	sre := `\[\[([\w\s/]+?)\]\]`
+	sre := `\[\[(.+?)\]\]`
 	re := regexp.MustCompile(sre)
 
 	// Change wikitext links to use page link with underscores:
@@ -902,14 +902,14 @@ func translateSimpleLinks(body, bookName string) string {
 
 	// Replace wikitext link with equivalent markdown link:
 	// "{{/Book_Name/Enterprise_Bridge|Enterprise Bridge}}" => "[Enterprise Bridge](/Book_Name/Enterprise_Bridge)"
-	sre = `\{\{([\w\s/]+?)\|(.+?)\}\}`
+	sre = `\{\{(.+?)\|(.+?)\}\}`
 	re = regexp.MustCompile(sre)
 	body = re.ReplaceAllString(body, "[$2]($1)")
 	return body
 }
 
 func translatePipeLinks(body, bookName string) string {
-	sre := `\[\[([\w\s/]+?)\|(.+?)\]\]`
+	sre := `\[\[(.+?)\|(.+?)\]\]`
 	re := regexp.MustCompile(sre)
 
 	// Change wikitext links to use page link with underscores:
@@ -986,7 +986,7 @@ func createpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		P("  <section class=\"flex flex-row content-start\">\n")
 		P("    <section class=\"widget-1\">\n")
 		P("      <form class=\"w-page mb-4\" method=\"post\" action=\"/createpage/?bookid=%d&title=%s\">\n", bookid, url.QueryEscape(p.Title))
-		P("      <h1 class=\"fg-2 mb-4\">Create Page '%s'</h1>", p.Title)
+		P("      <h1 class=\"fg-1 mb-4\">Create Page '%s'</h1>", p.Title)
 		if errmsg != "" {
 			P("<div class=\"mb-2\">\n")
 			P("<p class=\"text-red-500\">%s</p>\n", errmsg)
@@ -1081,7 +1081,7 @@ func editpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		P("  <section class=\"flex flex-row content-start\">\n")
 		P("    <section class=\"widget-1\">\n")
 		P("      <form class=\"w-page mb-4\" method=\"post\" action=\"/editpage/?bookid=%d&pageid=%d\">\n", bookid, pageid)
-		P("      <h1 class=\"fg-2 mb-4\">Edit Page '%s'</h1>", p.Title)
+		P("      <h1 class=\"fg-1 mb-4\">Edit Page '%s'</h1>", p.Title)
 		if errmsg != "" {
 			P("<div class=\"mb-2\">\n")
 			P("<p class=\"text-red-500\">%s</p>\n", errmsg)
@@ -1152,7 +1152,7 @@ func createbookHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		P("  <section class=\"flex flex-row content-start\">\n")
 		P("    <section class=\"widget-1\">\n")
 		P("      <form class=\"w-page mb-4\" method=\"post\" action=\"/createbook/\">\n")
-		P("      <h1 class=\"fg-2 mb-4\">Create Book</h1>")
+		P("      <h1 class=\"fg-1 mb-4\">Create Book</h1>")
 		if errmsg != "" {
 			P("<div class=\"mb-2\">\n")
 			P("<p class=\"text-red-500\">%s</p>\n", errmsg)
@@ -1232,7 +1232,7 @@ func editbookHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		P("  <section class=\"flex flex-row content-start\">\n")
 		P("    <section class=\"widget-1\">\n")
 		P("      <form class=\"w-page mb-4\" method=\"post\" action=\"/editbook/?bookid=%d\">\n", bookid)
-		P("      <h1 class=\"fg-2 mb-4\">Edit Book</h1>")
+		P("      <h1 class=\"fg-1 mb-4\">Edit Book</h1>")
 		if errmsg != "" {
 			P("<div class=\"mb-2\">\n")
 			P("<p class=\"text-red-500\">%s</p>\n", errmsg)
