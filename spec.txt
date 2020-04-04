@@ -14,10 +14,13 @@ New York also has [[public transport|public transportation]].
 For adv, how about auto-generating the page ids? See below:
 
 London has [[public transport]]
-will link to /BookName/123 where 123 is the generated number.
+will link to "/createpage/?bookid=n&frompageid=nn&fromlink=public+transport where nn is the current page number.
+For admin user, the link will be displayed in a predetermined color.
+For non-admin, the link won't be displayed, indicating that the target page isn't there yet.
 
 Link to page 123 explicitly:
-London has [[public transport=>123]]
+London has [[public transport=>123]] becomes "/bookname/123"
+
 
 
 
