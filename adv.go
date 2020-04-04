@@ -220,6 +220,20 @@ func sqlexec(db *sql.DB, s string, pp ...interface{}) (sql.Result, error) {
 	return stmt.Exec(pp...)
 }
 
+func txstmt(tx *sql.Tx, s string) *sql.Stmt {
+	stmt, err := tx.Prepare(s)
+	if err != nil {
+		log.Fatalf("tx.Prepare() sql: '%s'\nerror: '%s'", s, err)
+	}
+	return stmt
+}
+
+func txexec(tx *sql.Tx, s string, pp ...interface{}) (sql.Result, error) {
+	stmt := txstmt(tx, s)
+	defer stmt.Close()
+	return stmt.Exec(pp...)
+}
+
 func createAndInitTables(newfile string) {
 	if fileExists(newfile) {
 		s := fmt.Sprintf("File '%s' already exists. Can't initialize it.\n", newfile)
@@ -234,25 +248,70 @@ func createAndInitTables(newfile string) {
 	}
 
 	ss := []string{
-		"BEGIN TRANSACTION;",
-		"CREATE TABLE book (book_id INTEGER PRIMARY KEY NOT NULL, name TEXT, desc TEXT);",
+		"CREATE TABLE book (book_id INTEGER PRIMARY KEY NOT NULL, name TEXT, desc TEXT, startpage_id INTEGER DEFAULT 0);",
 		"CREATE TABLE page (page_id INTEGER PRIMARY KEY NOT NULL, book_id INTEGER NOT NULL, title TEXT, body TEXT);",
 		"CREATE TABLE user (user_id INTEGER PRIMARY KEY NOT NULL, username TEXT, password TEXT, active INTEGER NOT NULL, email TEXT, CONSTRAINT unique_username UNIQUE (username));",
 		"INSERT INTO user (user_id, username, password, active, email) VALUES (1, 'admin', '', 1, '');",
-		"INSERT INTO book (book_id, name, desc) VALUES (1, 'Sesame Street Adventure', 'Join your favorite characters - Oscar the Grouch, Big Bird, Snuffleupagus, and Mr. Hooper on a gritty, urban adventure through the mean streets of Sesame Street.');",
-		"INSERT INTO book (book_id, name, desc) VALUES (2, 'Escape', 'Based on the original *Escape* book by R.A. Montgomery from the Choose Your Own Adventure Books series. You''re the star of the story, choose from 27 possible endings.');",
-		"INSERT INTO book (book_id, name, desc) VALUES (3, 'Space Patrol', 'You are the commander of Space Rescue Emergency Vessel III. You have spent almost six months alone in space, and your only companion is your computer, Henry. You are steering your ship through a meteorite shower when an urgent signal comes from headquarters- a ship in your sector is under attack by space pirates!');",
-		"INSERT INTO book (book_id, name, desc) VALUES (4, 'Prisoner of the Ant People', 'R. A. Montgomery takes YOU on an otherworldly adventure as you fight off the the feared Ant People, who have recently joined forces with the Evil Power Master.');",
-		"INSERT INTO book (book_id, name, desc) VALUES (5, 'War with the Evil Power Master', 'You are the commander of the Lacoonian System Rapid Force response team, in charge of protecting all planets in the System. You learn that the Evil Power Master has zeroed in on three planets and plans to destroy them. The safety of the Lacoonian System depends on you!');",
-		"COMMIT;",
 	}
 
+	tx, err := db.Begin()
+	if err != nil {
+		log.Printf("DB error (%s)\n", err)
+		os.Exit(1)
+	}
 	for _, s := range ss {
-		_, err := sqlexec(db, s)
+		_, err := txexec(tx, s)
 		if err != nil {
-			log.Printf("DB error setting up newsboard db on '%s' (%s)\n", newfile, err)
+			tx.Rollback()
+			log.Printf("DB error (%s)\n", err)
 			os.Exit(1)
 		}
+	}
+	err = tx.Commit()
+	if err != nil {
+		log.Printf("DB error (%s)\n", err)
+		os.Exit(1)
+	}
+
+	_, err = createBook(db, &Book{
+		Name: "Sesame Street Adventure",
+		Desc: `Join your favorite characters - Oscar the Grouch, Big Bird, Snuffleupagus, and Mr. Hooper on a gritty, urban adventure through the mean streets of Sesame Street.`,
+	}, "")
+	if err != nil {
+		log.Printf("DB error (%s)\n", err)
+		os.Exit(1)
+	}
+	_, err = createBook(db, &Book{
+		Name: "Escape",
+		Desc: `Based on the original *Escape* book by R.A. Montgomery from the Choose Your Own Adventure Books series. You''re the star of the story, choose from 27 possible endings.`,
+	}, "")
+	if err != nil {
+		log.Printf("DB error (%s)\n", err)
+		os.Exit(1)
+	}
+	_, err = createBook(db, &Book{
+		Name: "Space Patrol",
+		Desc: `You are the commander of Space Rescue Emergency Vessel III. You have spent almost six months alone in space, and your only companion is your computer, Henry. You are steering your ship through a meteorite shower when an urgent signal comes from headquarters- a ship in your sector is under attack by space pirates!`,
+	}, "")
+	if err != nil {
+		log.Printf("DB error (%s)\n", err)
+		os.Exit(1)
+	}
+	_, err = createBook(db, &Book{
+		Name: "Prisoner of the Ant People",
+		Desc: `R. A. Montgomery takes YOU on an otherworldly adventure as you fight off the the feared Ant People, who have recently joined forces with the Evil Power Master.`,
+	}, "")
+	if err != nil {
+		log.Printf("DB error (%s)\n", err)
+		os.Exit(1)
+	}
+	_, err = createBook(db, &Book{
+		Name: "War with the Evil Power Master",
+		Desc: `You are the commander of the Lacoonian System Rapid Force response team, in charge of protecting all planets in the System. You learn that the Evil Power Master has zeroed in on three planets and plans to destroy them. The safety of the Lacoonian System depends on you!`,
+	}, "")
+	if err != nil {
+		log.Printf("DB error (%s)\n", err)
+		os.Exit(1)
 	}
 }
 
@@ -373,6 +432,14 @@ func handleDbErr(w http.ResponseWriter, err error, sfunc string) bool {
 	return false
 }
 
+func handleTxErr(tx *sql.Tx, err error) bool {
+	if err != nil {
+		tx.Rollback()
+		return true
+	}
+	return false
+}
+
 func validateLogin(w http.ResponseWriter, login *User) bool {
 	if login.Userid == -1 {
 		http.Error(w, "Not logged in.", 401)
@@ -448,6 +515,46 @@ func queryPageName(db *sql.DB, bookid int64, title string) *Page {
 		return nil
 	}
 	return &p
+}
+
+func createBook(db *sql.DB, b *Book, intro string) (int64, error) {
+	tx, err := db.Begin()
+	if err != nil {
+		return 0, err
+	}
+
+	s := "INSERT INTO page (book_id, body) VALUES (?, ?)"
+	result, err := txexec(tx, s, 0, intro)
+	if handleTxErr(tx, err) {
+		return 0, err
+	}
+	pageid, err := result.LastInsertId()
+	if handleTxErr(tx, err) {
+		return 0, err
+	}
+
+	s = "INSERT INTO book (name, desc, startpage_id) VALUES (?, ?, ?)"
+	result, err = txexec(tx, s, b.Name, b.Desc, pageid)
+	if handleTxErr(tx, err) {
+		return 0, err
+	}
+	bookid, err := result.LastInsertId()
+	if handleTxErr(tx, err) {
+		return 0, err
+	}
+
+	s = "UPDATE page SET book_id = ? WHERE page_id = ?"
+	result, err = txexec(tx, s, bookid, pageid)
+	if handleTxErr(tx, err) {
+		return 0, err
+	}
+
+	err = tx.Commit()
+	if handleTxErr(tx, err) {
+		return 0, err
+	}
+
+	return bookid, nil
 }
 
 // Helper function to make fmt.Fprintf(w, ...) calls shorter.
