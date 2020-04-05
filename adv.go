@@ -32,15 +32,15 @@ type Site struct {
 }
 
 type Book struct {
-	Bookid int64
-	Name   string
-	Desc   string
+	Bookid      int64
+	Name        string
+	Desc        string
+	Startpageid int64
 }
 
 type Page struct {
 	Pageid int64
 	Bookid int64
-	Title  string
 	Body   string
 }
 
@@ -59,10 +59,6 @@ func main() {
 		createAndInitTables(dbfile)
 		os.Exit(0)
 	}
-
-	//$$ translate link test
-	//body := "Now is the time for all good men to come to the aid of the party. You can decide to [[left room|turn left]] or [[right room|turn right]] or [[middle room]] or [[upper room|go up]]"
-	//fmt.Printf("\n%s\n\n", translateLinks(body, "Space Patrol"))
 
 	// Need to specify a db file as first parameter.
 	if len(parms) == 0 {
@@ -249,7 +245,7 @@ func createAndInitTables(newfile string) {
 
 	ss := []string{
 		"CREATE TABLE book (book_id INTEGER PRIMARY KEY NOT NULL, name TEXT, desc TEXT, startpage_id INTEGER DEFAULT 0);",
-		"CREATE TABLE page (page_id INTEGER PRIMARY KEY NOT NULL, book_id INTEGER NOT NULL, title TEXT, body TEXT);",
+		"CREATE TABLE page (page_id INTEGER PRIMARY KEY NOT NULL, book_id INTEGER NOT NULL, body TEXT);",
 		"CREATE TABLE user (user_id INTEGER PRIMARY KEY NOT NULL, username TEXT, password TEXT, active INTEGER NOT NULL, email TEXT, CONSTRAINT unique_username UNIQUE (username));",
 		"INSERT INTO user (user_id, username, password, active, email) VALUES (1, 'admin', '', 1, '');",
 	}
@@ -454,14 +450,12 @@ func validateLogin(w http.ResponseWriter, login *User) bool {
 
 func queryBook(db *sql.DB, bookid int64) *Book {
 	var b Book
-	b.Bookid = -1
 
-	s := "SELECT book_id, name, desc FROM book WHERE book_id = ?"
+	s := "SELECT book_id, name, desc, startpage_id FROM book WHERE book_id = ?"
 	row := db.QueryRow(s, bookid)
-	err := row.Scan(&b.Bookid, &b.Name, &b.Desc)
+	err := row.Scan(&b.Bookid, &b.Name, &b.Desc, &b.Startpageid)
 	if err == sql.ErrNoRows {
 		return nil
-		return &b
 	}
 	if err != nil {
 		fmt.Printf("queryBook() db error (%s)\n", err)
@@ -472,9 +466,10 @@ func queryBook(db *sql.DB, bookid int64) *Book {
 
 func queryBookName(db *sql.DB, name string) *Book {
 	var b Book
-	s := "SELECT book_id, name, desc FROM book WHERE name = ?"
+
+	s := "SELECT book_id, name, desc, startpage_id FROM book WHERE name = ?"
 	row := db.QueryRow(s, name)
-	err := row.Scan(&b.Bookid, &b.Name, &b.Desc)
+	err := row.Scan(&b.Bookid, &b.Name, &b.Desc, &b.Startpageid)
 	if err == sql.ErrNoRows {
 		return nil
 	}
@@ -487,31 +482,15 @@ func queryBookName(db *sql.DB, name string) *Book {
 
 func queryPage(db *sql.DB, pageid, bookid int64) *Page {
 	var p Page
-	p.Pageid = -1
 
-	s := "SELECT page_id, title, body FROM page WHERE page_id = ? AND book_id = ?"
+	s := "SELECT page_id, body FROM page WHERE page_id = ? AND book_id = ?"
 	row := db.QueryRow(s, pageid, bookid)
-	err := row.Scan(&p.Pageid, &p.Title, &p.Body)
-	if err == sql.ErrNoRows {
-		return &p
-	}
-	if err != nil {
-		fmt.Printf("queryPage() db error (%s)\n", err)
-		return &p
-	}
-	return &p
-}
-
-func queryPageName(db *sql.DB, bookid int64, title string) *Page {
-	var p Page
-	s := "SELECT page_id, book_id, title, body FROM page WHERE book_id = ? AND title = ?"
-	row := db.QueryRow(s, bookid, title)
-	err := row.Scan(&p.Pageid, &p.Bookid, &p.Title, &p.Body)
+	err := row.Scan(&p.Pageid, &p.Body)
 	if err == sql.ErrNoRows {
 		return nil
 	}
 	if err != nil {
-		fmt.Printf("queryBook() db error (%s)\n", err)
+		fmt.Printf("queryPage() db error (%s)\n", err)
 		return nil
 	}
 	return &p
@@ -555,6 +534,19 @@ func createBook(db *sql.DB, b *Book, intro string) (int64, error) {
 	}
 
 	return bookid, nil
+}
+
+func createPage(db *sql.DB, bookid int64) (int64, error) {
+	s := "INSERT INTO page (book_id, body) VALUES (?, ?)"
+	result, err := sqlexec(db, s, bookid, "")
+	if err != nil {
+		return 0, err
+	}
+	pageid, err := result.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	return pageid, nil
 }
 
 // Helper function to make fmt.Fprintf(w, ...) calls shorter.
@@ -619,7 +611,7 @@ func printNav(w http.ResponseWriter, r *http.Request, db *sql.DB, login *User, b
 	P("<h1 class=\"inline font-bold mr-2\"><a href=\"/\">Game Books</a></h1>\n")
 	P("<ul class=\"list-none inline\">\n")
 	if b != nil {
-		P("  <li class=\"inline\"><a class=\"link-1 no-underline\" href=\"%s\">%s</a></li>\n", pageUrl(b.Name, ""), b.Name)
+		P("  <li class=\"inline\"><a class=\"link-1 no-underline\" href=\"%s\">%s</a></li>\n", pageUrl(b.Name, 0), b.Name)
 	}
 	P("</ul>\n")
 	P("</div>\n")
@@ -848,21 +840,22 @@ func createaccountHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 	}
 }
 
-func parseBookPageUrl(surl string) (string, string) {
-	var bookName, pageName string
+func parseBookPageUrl(surl string) (string, int64) {
+	var bookName string
+	var pageid int64
 
-	sre := `^/(.+?)(?:/(.*?))?/?$`
+	sre := `^/(.+?)(?:/(\d*?))?/?$`
 	re := regexp.MustCompile(sre)
 	matches := re.FindStringSubmatch(surl)
 	if matches == nil {
-		return bookName, pageName
+		return bookName, pageid
 	}
 	bookName = matches[1]
-	if len(matches) > 2 {
-		pageName = matches[2]
+	if len(matches) > 2 && matches[2] != "" {
+		pageid = idtoi(matches[2])
 	}
 
-	return underscoreToSpace(bookName), underscoreToSpace(pageName)
+	return underscoreToSpace(bookName), pageid
 }
 
 func spaceToUnderscore(s string) string {
@@ -877,21 +870,19 @@ func indexHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		login := getLoginUser(r, db)
 
-		bookName, pageTitle := parseBookPageUrl(r.URL.Path)
-		var b *Book
-		if bookName != "" {
-			b = queryBookName(db, bookName)
-			if b == nil {
-				http.Error(w, fmt.Sprintf("'%s' not found.", bookName), 404)
-				return
-			}
-		}
-
+		bookName, pageid := parseBookPageUrl(r.URL.Path)
 		if bookName == "" {
 			printBooksMenu(w, r, db, login)
 			return
 		}
-		printPage(w, r, db, login, b, pageTitle)
+
+		b := queryBookName(db, bookName)
+		if b == nil {
+			http.Error(w, fmt.Sprintf("'%s' not found.", bookName), 404)
+			return
+		}
+
+		printPage(w, r, db, login, b, pageid)
 	}
 }
 
@@ -917,7 +908,7 @@ func printBooksMenu(w http.ResponseWriter, r *http.Request, db *sql.DB, login *U
 		rows.Scan(&b.Bookid, &b.Name, &b.Desc)
 		P("<div class=\"ml-2 mb-4\">\n")
 		P("  <div class=\"flex flex-row justify-between\">\n")
-		P("    <a class=\"block link-1 no-underline text-base\" href=\"%s\">%s</a>\n", pageUrl(b.Name, ""), b.Name)
+		P("    <a class=\"block link-1 no-underline text-base\" href=\"%s\">%s</a>\n", pageUrl(b.Name, 0), b.Name)
 		if login.Userid == ADMIN_ID {
 			P("    <a class=\"block link-2 text-xs\" href=\"/editbook?bookid=%d\">Edit</a>\n", b.Bookid)
 		}
@@ -946,9 +937,9 @@ func printBooksMenu(w http.ResponseWriter, r *http.Request, db *sql.DB, login *U
 	printFoot(w)
 }
 
-func printPage(w http.ResponseWriter, r *http.Request, db *sql.DB, login *User, b *Book, pageTitle string) {
-	if pageTitle == "" {
-		pageTitle = "start"
+func printPage(w http.ResponseWriter, r *http.Request, db *sql.DB, login *User, b *Book, pageid int64) {
+	if pageid == 0 {
+		pageid = b.Startpageid
 	}
 
 	w.Header().Set("Content-Type", "text/html")
@@ -960,12 +951,16 @@ func printPage(w http.ResponseWriter, r *http.Request, db *sql.DB, login *User, 
 	P("  <section class=\"flex flex-row justify-center\">\n")
 	P("    <section class=\"widget-1 min-h-64 flex flex-col py-4 px-8\">\n")
 	P("      <article class=\"page w-page flex-grow mb-4\">\n")
-	p := queryPageName(db, b.Bookid, pageTitle)
+	p := queryPage(db, pageid, b.Bookid)
 	if p == nil {
 		P("<h1 class=\"fg-1 mb-4\">Page Not Found</h1>\n")
 	} else {
-		p.Body = translateLinks(p.Body, b.Name)
-		P("%s\n", parseMarkdown(p.Body))
+		p.Body = convertSrcLinksToMarkdown(p.Body, b.Name)
+		if p.Body != "" {
+			P("%s\n", parseMarkdown(p.Body))
+		} else {
+			P("<p>(Empty page)</p>\n")
+		}
 	}
 	P("      </article>\n")
 
@@ -973,10 +968,9 @@ func printPage(w http.ResponseWriter, r *http.Request, db *sql.DB, login *User, 
 		P("<div class=\"flex flex-row justify-around bg-3 fg-3 p-1\">\n")
 		P("  <ul class=\"list-none text-xs\">\n")
 		if p == nil {
-			P("    <li class=\"inline\"><a class=\"underline mr-2\" href=\"/createpage?bookid=%d&title=%s\">Create Page</a></li>\n", b.Bookid, url.QueryEscape(pageTitle))
+			P("    <li class=\"inline\"><a class=\"underline mr-2\" href=\"/createpage?bookid=%d&pageid=%d\">Create Page</a></li>\n", b.Bookid, pageid)
 		} else {
-			P("    <li class=\"inline\"><a class=\"underline mr-2\" href=\"/editpage?bookid=%d&pageid=%d\">Edit</a></li>\n", b.Bookid, p.Pageid)
-			P("    <li class=\"inline\"><a class=\"underline\" href=\"/delpage?bookid=%d&pageid=%d\">Delete</a></li>\n", b.Bookid, p.Pageid)
+			P("    <li class=\"inline\"><a class=\"underline mr-2\" href=\"/editpage?bookid=%d&pageid=%d\">Edit</a></li>\n", b.Bookid, pageid)
 		}
 		P("  </ul>\n")
 		P("</div>\n")
@@ -992,41 +986,53 @@ func bookUrl(bookName string) string {
 	return fmt.Sprintf("/%s", url.QueryEscape(spaceToUnderscore(bookName)))
 }
 
-func pageUrl(bookName, pageTitle string) string {
-	return fmt.Sprintf("/%s/%s", url.QueryEscape(spaceToUnderscore(bookName)), url.QueryEscape(spaceToUnderscore(pageTitle)))
+func pageUrl(bookName string, pageid int64) string {
+	if pageid <= 0 {
+		return fmt.Sprintf("/%s/", url.QueryEscape(spaceToUnderscore(bookName)))
+	}
+	return fmt.Sprintf("/%s/%d", url.QueryEscape(spaceToUnderscore(bookName)), pageid)
 }
 
-// Translate wikitext links into markdown links.
-// "[[Texas|Lone Star State]]" => "[Lone Star State](/Texas)"
-// "[[Enterprise Bridge|Go to Captain's Bridge]]" => "[Go to Captain's Bridge](/Enterprise_Bridge)"
-func translateLinks(body, bookName string) string {
-	body = translateSimpleLinks(body, bookName)
-	body = translatePipeLinks(body, bookName)
-	return body
-}
-
-func translateSimpleLinks(body, bookName string) string {
-	sre := `\[\[([^|]+?)\]\]`
+func convertSrcLinksToMarkdown(body, bookName string) string {
+	sre := `\[\[(.+?)=>(\d+?)\]\]`
 	re := regexp.MustCompile(sre)
 
-	// "[[Enterprise Bridge]]" => "[Enterprise Bridge](/Book_Name/Enterprise_Bridge)"
-	body = re.ReplaceAllStringFunc(body, func(slink string) string {
-		matches := re.FindStringSubmatch(slink)
-		return fmt.Sprintf("[%s](%s)", matches[1], pageUrl(bookName, matches[1]))
-	})
+	body = re.ReplaceAllString(body, spaceToUnderscore(fmt.Sprintf("[$1](/%s/$2)", bookName)))
 	return body
 }
 
-func translatePipeLinks(body, bookName string) string {
-	sre := `\[\[(.+?)\|(.+?)\]\]`
+// Auto-create pages when the target page id is missing.
+// Ex.
+//   [[Take the left tunnel]]
+// becomes:
+//   [[Take the left tunnel=>123]]
+// where 123 is the newly created page id.
+func insertNewPageLinks(db *sql.DB, body string, bookid int64) (string, error) {
+	var reterr error
+
+	sre := `\[\[(.+?)\]\]`
 	re := regexp.MustCompile(sre)
 
-	// "[[Enterprise Bridge|Go to bridge]]" => "[Go to bridge](/Book_Name/Enterprise_Bridge)"
-	body = re.ReplaceAllStringFunc(body, func(slink string) string {
-		matches := re.FindStringSubmatch(slink)
-		return fmt.Sprintf("[%s](%s)", matches[2], pageUrl(bookName, matches[1]))
+	// This code is convuluted because of db error checking,
+	// maybe there's a simpler way to rewrite it.
+	body = re.ReplaceAllStringFunc(body, func(smatch string) string {
+		if reterr != nil {
+			return smatch
+		}
+		if strings.Contains(smatch, "=>") {
+			return smatch
+		}
+
+		matches := re.FindStringSubmatch(smatch)
+		newpageid, err := createPage(db, bookid)
+		if err != nil {
+			reterr = err
+			return smatch
+		}
+		return fmt.Sprintf("[[%s=>%d]]", matches[1], newpageid)
 	})
-	return body
+
+	return body, reterr
 }
 
 func parseMarkdown(s string) string {
@@ -1035,15 +1041,12 @@ func parseMarkdown(s string) string {
 
 func createpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var p Page
 		var err error
+		var body string
 
 		login := getLoginUser(r, db)
 		bookid := idtoi(r.FormValue("bookid"))
-		p.Title, err = url.QueryUnescape(strings.TrimSpace(r.FormValue("title")))
-		if err != nil {
-			p.Title = strings.TrimSpace(r.FormValue("title"))
-		}
+		pageid := idtoi(r.FormValue("pageid"))
 
 		if login.Userid != ADMIN_ID {
 			http.Error(w, "admin user required", 401)
@@ -1053,9 +1056,11 @@ func createpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 			http.Error(w, "bookid required", 401)
 			return
 		}
-		if p.Title == "" {
-			http.Error(w, "title required", 401)
-			return
+		if pageid > 0 {
+			if queryPage(db, pageid, bookid) != nil {
+				http.Error(w, "page already exists", 401)
+				return
+			}
 		}
 		b := queryBook(db, bookid)
 		if b == nil {
@@ -1065,22 +1070,33 @@ func createpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 
 		var errmsg string
 		if r.Method == "POST" {
-			p.Body = strings.TrimSpace(r.FormValue("body"))
+			body = strings.TrimSpace(r.FormValue("body"))
 			for {
-				if p.Body == "" {
+				if body == "" {
 					errmsg = "Please enter some text."
 					break
 				}
+				body, err = insertNewPageLinks(db, body, bookid)
+				if err != nil {
+					http.Error(w, "Server error", 500)
+					return
+				}
 
-				var err error
-				s := "INSERT INTO page (book_id, title, body) VALUES (?, ?, ?)"
-				_, err = sqlexec(db, s, bookid, p.Title, p.Body)
+				var result sql.Result
+				if pageid > 0 {
+					s := "INSERT INTO page (page_id, book_id, body) VALUES (?, ?, ?)"
+					result, err = sqlexec(db, s, pageid, bookid, body)
+				} else {
+					s := "INSERT INTO page (book_id, body) VALUES (?, ?)"
+					result, err = sqlexec(db, s, bookid, body)
+				}
 				if err != nil {
 					log.Printf("DB error saving page (%s)\n", err)
 					errmsg = "A problem occured. Please try again."
 					break
 				}
-				http.Redirect(w, r, pageUrl(b.Name, p.Title), http.StatusSeeOther)
+				pageid, _ = result.LastInsertId()
+				http.Redirect(w, r, pageUrl(b.Name, pageid), http.StatusSeeOther)
 				return
 			}
 		}
@@ -1093,22 +1109,17 @@ func createpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		P("<section class=\"container main-container\">\n")
 		P("  <section class=\"flex flex-row justify-center\">\n")
 		P("    <section class=\"widget-1 p-4\">\n")
-		P("      <form class=\"w-editpage\" method=\"post\" action=\"/createpage/?bookid=%d&title=%s\">\n", bookid, url.QueryEscape(p.Title))
-		P("      <h1 class=\"fg-1 mb-4\">Create Page '%s'</h1>", p.Title)
+		P("      <form class=\"w-editpage\" method=\"post\" action=\"/createpage/?bookid=%d&pageid=%d\">\n", bookid, pageid)
+		P("      <h1 class=\"fg-1 mb-4\">Create Page</h1>")
 		if errmsg != "" {
 			P("<div class=\"mb-2\">\n")
 			P("<p class=\"text-red-500\">%s</p>\n", errmsg)
 			P("</div>\n")
 		}
 
-		P("  <div class=\"mb-2\">\n")
-		P("    <label class=\"block label-1\" for=\"title\">title</label>\n")
-		P("    <input class=\"block input-1 w-full\" id=\"title\" name=\"title\" type=\"text\" size=\"60\" value=\"%s\" readonly>\n", p.Title)
-		P("  </div>\n")
-
 		P("  <div class=\"mb-4\">\n")
 		P("    <label class=\"block label-1\" for=\"body\">text</label>\n")
-		P("    <textarea class=\"block input-1 w-full\" id=\"body\" name=\"body\" rows=\"15\">%s</textarea>\n", p.Body)
+		P("    <textarea class=\"block input-1 w-full\" id=\"body\" name=\"body\" rows=\"15\">%s</textarea>\n", body)
 		P("  </div>\n")
 
 		P("  <div class=\"\">\n")
@@ -1125,6 +1136,8 @@ func createpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 
 func editpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
+		var err error
+
 		login := getLoginUser(r, db)
 		bookid := idtoi(r.FormValue("bookid"))
 		pageid := idtoi(r.FormValue("pageid"))
@@ -1155,27 +1168,27 @@ func editpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 
 		var errmsg string
 		if r.Method == "POST" {
-			p.Title = strings.TrimSpace(r.FormValue("title"))
 			p.Body = strings.TrimSpace(r.FormValue("body"))
 			for {
-				if p.Title == "" {
-					errmsg = "Please enter a title."
-					break
-				}
 				if p.Body == "" {
 					errmsg = "Please enter some text."
 					break
 				}
+				p.Body, err = insertNewPageLinks(db, p.Body, bookid)
+				if err != nil {
+					http.Error(w, "Server error", 500)
+					return
+				}
 
 				var err error
-				s := "UPDATE page SET title = ?, body = ? WHERE page_id = ?"
-				_, err = sqlexec(db, s, p.Title, p.Body, p.Pageid)
+				s := "UPDATE page SET body = ? WHERE page_id = ?"
+				_, err = sqlexec(db, s, p.Body, p.Pageid)
 				if err != nil {
 					log.Printf("DB error saving page (%s)\n", err)
 					errmsg = "A problem occured. Please try again."
 					break
 				}
-				http.Redirect(w, r, pageUrl(b.Name, p.Title), http.StatusSeeOther)
+				http.Redirect(w, r, pageUrl(b.Name, p.Pageid), http.StatusSeeOther)
 				return
 			}
 		}
@@ -1189,17 +1202,12 @@ func editpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		P("  <section class=\"flex flex-row justify-center\">\n")
 		P("    <section class=\"widget-1 p-4\">\n")
 		P("      <form class=\"w-editpage\" method=\"post\" action=\"/editpage/?bookid=%d&pageid=%d\">\n", bookid, pageid)
-		P("      <h1 class=\"fg-1 mb-4\">Edit Page '%s'</h1>", p.Title)
+		P("      <h1 class=\"fg-1 mb-4\">Edit Page</h1>")
 		if errmsg != "" {
 			P("<div class=\"mb-2\">\n")
 			P("<p class=\"text-red-500\">%s</p>\n", errmsg)
 			P("</div>\n")
 		}
-
-		P("  <div class=\"mb-2\">\n")
-		P("    <label class=\"block label-1\" for=\"title\">title</label>\n")
-		P("    <input class=\"block input-1 w-full\" id=\"title\" name=\"title\" type=\"text\" size=\"60\" value=\"%s\" readonly>\n", p.Title)
-		P("  </div>\n")
 
 		P("  <div class=\"mb-4\">\n")
 		P("    <label class=\"block label-1\" for=\"body\">text</label>\n")
@@ -1238,15 +1246,13 @@ func createbookHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 					break
 				}
 
-				var err error
-				s := "INSERT INTO book (name, desc) VALUES (?, ?)"
-				_, err = sqlexec(db, s, b.Name, b.Desc)
+				_, err := createBook(db, &b, "")
 				if err != nil {
-					log.Printf("DB error saving book (%s)\n", err)
+					log.Printf("Error saving book (%s)\n", err)
 					errmsg = "A problem occured. Please try again."
 					break
 				}
-				http.Redirect(w, r, pageUrl(b.Name, ""), http.StatusSeeOther)
+				http.Redirect(w, r, pageUrl(b.Name, 0), http.StatusSeeOther)
 				return
 			}
 		}
