@@ -611,7 +611,7 @@ func printNav(w http.ResponseWriter, r *http.Request, db *sql.DB, login *User, b
 	P("<h1 class=\"inline font-bold mr-2\"><a href=\"/\">Game Books</a></h1>\n")
 	P("<ul class=\"list-none inline\">\n")
 	if b != nil {
-		P("  <li class=\"inline\"><a class=\"link-1 no-underline\" href=\"%s\">%s</a></li>\n", pageUrl(b.Name, 0), b.Name)
+		P("  <li class=\"inline\"><a class=\"link-1 no-underline\" href=\"%s\">%s</a></li>\n", pageUrl(b.Name, 0, ""), b.Name)
 	}
 	P("</ul>\n")
 	P("</div>\n")
@@ -908,7 +908,7 @@ func printBooksMenu(w http.ResponseWriter, r *http.Request, db *sql.DB, login *U
 		rows.Scan(&b.Bookid, &b.Name, &b.Desc)
 		P("<div class=\"ml-2 mb-4\">\n")
 		P("  <div class=\"flex flex-row justify-between\">\n")
-		P("    <a class=\"block link-1 no-underline text-base\" href=\"%s\">%s</a>\n", pageUrl(b.Name, 0), b.Name)
+		P("    <a class=\"block link-1 no-underline text-base\" href=\"%s\">%s</a>\n", pageUrl(b.Name, 0, ""), b.Name)
 		if login.Userid == ADMIN_ID {
 			P("    <a class=\"block link-2 text-xs\" href=\"/editbook?bookid=%d\">Edit</a>\n", b.Bookid)
 		}
@@ -942,6 +942,8 @@ func printPage(w http.ResponseWriter, r *http.Request, db *sql.DB, login *User, 
 		pageid = b.Startpageid
 	}
 
+	prevpageids := r.FormValue("prevpageids")
+
 	w.Header().Set("Content-Type", "text/html")
 	printHead(w, nil, nil)
 	printNav(w, r, db, login, nil)
@@ -953,9 +955,15 @@ func printPage(w http.ResponseWriter, r *http.Request, db *sql.DB, login *User, 
 	P("      <article class=\"page w-page flex-grow mb-4\">\n")
 	p := queryPage(db, pageid, b.Bookid)
 	if p == nil {
-		P("<h1 class=\"fg-1 mb-4\">Page Not Found</h1>\n")
+		P("<h1 class=\"fg-1 mb-4\">Page doesn't exist yet.</h1>\n")
 	} else {
-		p.Body = convertSrcLinksToMarkdown(p.Body, b.Name)
+		var ids string
+		if prevpageids != "" {
+			ids = fmt.Sprintf("%s,%d", prevpageids, pageid)
+		} else {
+			ids = fmt.Sprintf("%d", pageid)
+		}
+		p.Body = convertSrcLinksToMarkdown(p.Body, b.Name, ids)
 		if p.Body != "" {
 			P("%s\n", parseMarkdown(p.Body))
 		} else {
@@ -964,13 +972,28 @@ func printPage(w http.ResponseWriter, r *http.Request, db *sql.DB, login *User, 
 	}
 	P("      </article>\n")
 
+	// Show 'Back' link to previous page.
+	// Get last pageid in the list. Ex. ?frompageids=1,2,3  means frompageid=3
+	var backpageid int64
+	var backprevpageids string
+	ss := strings.Split(prevpageids, ",")
+	if len(ss) > 0 {
+		backpageid = idtoi(ss[len(ss)-1])
+		backprevpageids = strings.Join(ss[:len(ss)-1], ",")
+	}
+	if backpageid > 0 {
+		P("<div class=\"flex flex-row justify-start pb-1\">\n")
+		P("  <a class=\"block italic text-xs link-2 no-underline\" href=\"%s\">&lt;&lt; Back</a>\n", pageUrl(b.Name, backpageid, backprevpageids))
+		P("</div>\n")
+	}
+
 	if login.Userid == ADMIN_ID {
 		P("<div class=\"flex flex-row justify-around bg-3 fg-3 p-1\">\n")
 		P("  <ul class=\"list-none text-xs\">\n")
 		if p == nil {
-			P("    <li class=\"inline\"><a class=\"underline mr-2\" href=\"/createpage?bookid=%d&pageid=%d\">Create Page</a></li>\n", b.Bookid, pageid)
+			P("    <li class=\"inline\"><a class=\"underline mr-2\" href=\"/createpage?bookid=%d&pageid=%d&prevpageids=%s\">Create Page</a></li>\n", b.Bookid, pageid, prevpageids)
 		} else {
-			P("    <li class=\"inline\"><a class=\"underline mr-2\" href=\"/editpage?bookid=%d&pageid=%d\">Edit</a></li>\n", b.Bookid, pageid)
+			P("    <li class=\"inline\"><a class=\"underline mr-2\" href=\"/editpage?bookid=%d&pageid=%d&prevpageids=%s\">Edit</a></li>\n", b.Bookid, pageid, prevpageids)
 		}
 		P("  </ul>\n")
 		P("</div>\n")
@@ -986,18 +1009,20 @@ func bookUrl(bookName string) string {
 	return fmt.Sprintf("/%s", url.QueryEscape(spaceToUnderscore(bookName)))
 }
 
-func pageUrl(bookName string, pageid int64) string {
+func pageUrl(bookName string, pageid int64, prevpageids string) string {
 	if pageid <= 0 {
 		return fmt.Sprintf("/%s/", url.QueryEscape(spaceToUnderscore(bookName)))
 	}
-	return fmt.Sprintf("/%s/%d", url.QueryEscape(spaceToUnderscore(bookName)), pageid)
+	if prevpageids == "" {
+		return fmt.Sprintf("/%s/%d", url.QueryEscape(spaceToUnderscore(bookName)), pageid)
+	}
+	return fmt.Sprintf("/%s/%d?prevpageids=%s", url.QueryEscape(spaceToUnderscore(bookName)), pageid, prevpageids)
 }
 
-func convertSrcLinksToMarkdown(body, bookName string) string {
+func convertSrcLinksToMarkdown(body, bookName string, prevpageids string) string {
 	sre := `\[\[(.+?)=>(\d+?)\]\]`
 	re := regexp.MustCompile(sre)
-
-	body = re.ReplaceAllString(body, spaceToUnderscore(fmt.Sprintf("[$1](/%s/$2)", bookName)))
+	body = re.ReplaceAllString(body, spaceToUnderscore(fmt.Sprintf("[$1](/%s/$2?prevpageids=%s)", bookName, prevpageids)))
 	return body
 }
 
@@ -1047,6 +1072,7 @@ func createpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		login := getLoginUser(r, db)
 		bookid := idtoi(r.FormValue("bookid"))
 		pageid := idtoi(r.FormValue("pageid"))
+		prevpageids := r.FormValue("prevpageids")
 
 		if login.Userid != ADMIN_ID {
 			http.Error(w, "admin user required", 401)
@@ -1096,7 +1122,7 @@ func createpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 					break
 				}
 				pageid, _ = result.LastInsertId()
-				http.Redirect(w, r, pageUrl(b.Name, pageid), http.StatusSeeOther)
+				http.Redirect(w, r, pageUrl(b.Name, pageid, prevpageids), http.StatusSeeOther)
 				return
 			}
 		}
@@ -1109,7 +1135,7 @@ func createpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		P("<section class=\"container main-container\">\n")
 		P("  <section class=\"flex flex-row justify-center\">\n")
 		P("    <section class=\"widget-1 p-4\">\n")
-		P("      <form class=\"w-editpage\" method=\"post\" action=\"/createpage/?bookid=%d&pageid=%d\">\n", bookid, pageid)
+		P("      <form class=\"w-editpage\" method=\"post\" action=\"/createpage/?bookid=%d&pageid=%d&prevpageids=%s\">\n", bookid, pageid, prevpageids)
 		P("      <h1 class=\"fg-1 mb-4\">Create Page</h1>")
 		if errmsg != "" {
 			P("<div class=\"mb-2\">\n")
@@ -1141,6 +1167,7 @@ func editpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		login := getLoginUser(r, db)
 		bookid := idtoi(r.FormValue("bookid"))
 		pageid := idtoi(r.FormValue("pageid"))
+		prevpageids := r.FormValue("prevpageids")
 
 		if login.Userid != ADMIN_ID {
 			http.Error(w, "admin user required", 401)
@@ -1188,7 +1215,7 @@ func editpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 					errmsg = "A problem occured. Please try again."
 					break
 				}
-				http.Redirect(w, r, pageUrl(b.Name, p.Pageid), http.StatusSeeOther)
+				http.Redirect(w, r, pageUrl(b.Name, p.Pageid, prevpageids), http.StatusSeeOther)
 				return
 			}
 		}
@@ -1201,7 +1228,7 @@ func editpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		P("<section class=\"container main-container\">\n")
 		P("  <section class=\"flex flex-row justify-center\">\n")
 		P("    <section class=\"widget-1 p-4\">\n")
-		P("      <form class=\"w-editpage\" method=\"post\" action=\"/editpage/?bookid=%d&pageid=%d\">\n", bookid, pageid)
+		P("      <form class=\"w-editpage\" method=\"post\" action=\"/editpage/?bookid=%d&pageid=%d&prevpageids=%s\">\n", bookid, pageid, prevpageids)
 		P("      <h1 class=\"fg-1 mb-4\">Edit Page</h1>")
 		if errmsg != "" {
 			P("<div class=\"mb-2\">\n")
@@ -1252,7 +1279,7 @@ func createbookHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 					errmsg = "A problem occured. Please try again."
 					break
 				}
-				http.Redirect(w, r, pageUrl(b.Name, 0), http.StatusSeeOther)
+				http.Redirect(w, r, pageUrl(b.Name, 0, ""), http.StatusSeeOther)
 				return
 			}
 		}
