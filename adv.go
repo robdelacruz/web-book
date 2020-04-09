@@ -102,6 +102,7 @@ Initialize new book file:
 	http.HandleFunc("/editpage/", editpageHandler(db))
 	http.HandleFunc("/createbook/", createbookHandler(db))
 	http.HandleFunc("/editbook/", editbookHandler(db))
+	http.HandleFunc("/createbookmark/", createbookmarkHandler(db))
 	port := "8000"
 	fmt.Printf("Listening on %s...\n", port)
 	err = http.ListenAndServe(fmt.Sprintf(":%s", port), nil)
@@ -248,6 +249,7 @@ func createAndInitTables(newfile string) {
 		"CREATE TABLE page (page_id INTEGER PRIMARY KEY NOT NULL, book_id INTEGER NOT NULL, body TEXT);",
 		"CREATE TABLE user (user_id INTEGER PRIMARY KEY NOT NULL, username TEXT, password TEXT, active INTEGER NOT NULL, email TEXT, CONSTRAINT unique_username UNIQUE (username));",
 		"INSERT INTO user (user_id, username, password, active, email) VALUES (1, 'admin', '', 1, '');",
+		"CREATE TABLE bookmark (user_id INTEGER NOT NULL, book_id INTEGER NOT NULL, page_id INTEGER NOT NULL, desc TEXT);",
 	}
 
 	tx, err := db.Begin()
@@ -591,12 +593,13 @@ func printFoot(w io.Writer) {
 	P("</html>\n")
 }
 
-func printNav(w http.ResponseWriter, r *http.Request, db *sql.DB, login *User, b *Book) {
+func printNav(w http.ResponseWriter, r *http.Request, db *sql.DB, login *User, b *Book, pageid int64) {
 	if login == nil {
 		login = getLoginUser(r, db)
 	}
 	if b == nil {
-		bookName, _ := parseBookPageUrl(r.URL.Path)
+		var bookName string
+		bookName, pageid = parseBookPageUrl(r.URL.Path)
 		if bookName != "" {
 			b = queryBookName(db, bookName)
 		}
@@ -608,10 +611,17 @@ func printNav(w http.ResponseWriter, r *http.Request, db *sql.DB, login *User, b
 
 	// Menu section (left part)
 	P("<div>\n")
-	P("<h1 class=\"inline font-bold mr-2\"><a href=\"/\">Game Books</a></h1>\n")
+	P("<h1 class=\"inline mr-2\"><a href=\"/\">Game Books</a></h1>\n")
 	P("<ul class=\"list-none inline\">\n")
 	if b != nil {
-		P("  <li class=\"inline\"><a class=\"link-1 no-underline\" href=\"%s\">%s</a></li>\n", pageUrl(b.Name, 0, ""), b.Name)
+		P("  <li class=\"inline mr-2\">\n")
+		P("    <a class=\"link-2 no-underline font-bold\" href=\"%s\">%s</a>\n", pageUrl(b.Name, 0, ""), b.Name)
+		P("  </li>\n")
+	}
+	if b != nil {
+		P("  <li class=\"inline text-xs\">\n")
+		P("    <a class=\"link-2\" href=\"/bookmarks?bookid=%d\">bookmarks</a>\n", b.Bookid)
+		P("  </li>\n")
 	}
 	P("</ul>\n")
 	P("</div>\n")
@@ -622,10 +632,10 @@ func printNav(w http.ResponseWriter, r *http.Request, db *sql.DB, login *User, b
 	if login.Userid == -1 {
 		P("<li class=\"inline\"><a href=\"/login\">login</a></li>\n")
 	} else if login.Userid == ADMIN_ID {
-		P("<li class=\"inline\"><a href=\"/adminsetup/\">%s</a></li>\n", login.Username)
+		P("<li class=\"inline mr-1\"><a href=\"/adminsetup/\">%s</a></li>\n", login.Username)
 		P("<li class=\"inline\"><a href=\"/logout\">logout</a></li>\n")
 	} else {
-		P("<li class=\"inline\"><a href=\"/usersetup/\">%s</a></li>\n", login.Username)
+		P("<li class=\"inline mr-1\"><a href=\"/usersetup/\">%s</a></li>\n", login.Username)
 		P("<li class=\"inline\"><a href=\"/logout\">logout</a></li>\n")
 	}
 	P("</ul>\n")
@@ -682,7 +692,7 @@ func loginHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 
 		w.Header().Set("Content-Type", "text/html")
 		printHead(w, nil, nil)
-		printNav(w, r, db, login, nil)
+		printNav(w, r, db, login, nil, 0)
 
 		P := makeFprintf(w)
 		P("<section class=\"container main-container\">\n")
@@ -795,7 +805,7 @@ func createaccountHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 
 		w.Header().Set("Content-Type", "text/html")
 		printHead(w, nil, nil)
-		printNav(w, r, db, login, nil)
+		printNav(w, r, db, login, nil, 0)
 
 		P := makeFprintf(w)
 		P("<section class=\"container main-container\">\n")
@@ -889,7 +899,7 @@ func indexHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 func printBooksMenu(w http.ResponseWriter, r *http.Request, db *sql.DB, login *User) {
 	w.Header().Set("Content-Type", "text/html")
 	printHead(w, nil, nil)
-	printNav(w, r, db, login, nil)
+	printNav(w, r, db, login, nil, 0)
 
 	P := makeFprintf(w)
 	P("<section class=\"container main-container\">\n")
@@ -946,7 +956,7 @@ func printPage(w http.ResponseWriter, r *http.Request, db *sql.DB, login *User, 
 
 	w.Header().Set("Content-Type", "text/html")
 	printHead(w, nil, nil)
-	printNav(w, r, db, login, nil)
+	printNav(w, r, db, login, b, pageid)
 
 	P := makeFprintf(w)
 	P("<section class=\"container main-container\">\n")
@@ -981,11 +991,20 @@ func printPage(w http.ResponseWriter, r *http.Request, db *sql.DB, login *User, 
 		backpageid = idtoi(ss[len(ss)-1])
 		backprevpageids = strings.Join(ss[:len(ss)-1], ",")
 	}
+
+	P("<div class=\"flex flex-row justify-between pb-1\">\n")
 	if backpageid > 0 {
-		P("<div class=\"flex flex-row justify-start pb-1\">\n")
 		P("  <a class=\"block italic text-xs link-2 no-underline\" href=\"%s\">&lt;&lt; Back</a>\n", pageUrl(b.Name, backpageid, backprevpageids))
-		P("</div>\n")
+	} else {
+		P("  <a class=\"block italic text-xs link-2 no-underline\" href=\"/\">&lt;&lt; Books</a>\n")
 	}
+	P("  <p class=\"text-xs\">[%d]</p>\n", pageid)
+	if login.Userid != -1 {
+		P("  <a class=\"block italic text-xs link-2 no-underline\" href=\"/createbookmark?bookid=%d&pageid=%d&prevpageids=%s\">+bookmark</a>\n", b.Bookid, pageid, prevpageids)
+	} else {
+		P("  <div></div>\n")
+	}
+	P("</div>\n")
 
 	if login.Userid == ADMIN_ID {
 		P("<div class=\"flex flex-row justify-around bg-3 fg-3 p-1\">\n")
@@ -1129,7 +1148,7 @@ func createpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 
 		w.Header().Set("Content-Type", "text/html")
 		printHead(w, nil, nil)
-		printNav(w, r, db, login, b)
+		printNav(w, r, db, login, b, pageid)
 
 		P := makeFprintf(w)
 		P("<section class=\"container main-container\">\n")
@@ -1222,7 +1241,7 @@ func editpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 
 		w.Header().Set("Content-Type", "text/html")
 		printHead(w, nil, nil)
-		printNav(w, r, db, login, b)
+		printNav(w, r, db, login, b, pageid)
 
 		P := makeFprintf(w)
 		P("<section class=\"container main-container\">\n")
@@ -1286,7 +1305,7 @@ func createbookHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 
 		w.Header().Set("Content-Type", "text/html")
 		printHead(w, nil, nil)
-		printNav(w, r, db, login, nil)
+		printNav(w, r, db, login, nil, 0)
 
 		P := makeFprintf(w)
 		P("<section class=\"container main-container\">\n")
@@ -1366,7 +1385,7 @@ func editbookHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 
 		w.Header().Set("Content-Type", "text/html")
 		printHead(w, nil, nil)
-		printNav(w, r, db, login, nil)
+		printNav(w, r, db, login, b, 0)
 
 		P := makeFprintf(w)
 		P("<section class=\"container main-container\">\n")
@@ -1388,6 +1407,88 @@ func editbookHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		P("  <div class=\"mb-4\">\n")
 		P("    <label class=\"block label-1\" for=\"desc\">description</label>\n")
 		P("    <textarea class=\"block input-1 w-full\" id=\"desc\" name=\"desc\" rows=\"10\">%s</textarea>\n", b.Desc)
+		P("  </div>\n")
+
+		P("  <div class=\"\">\n")
+		P("    <button class=\"block btn-1 text-gray-800 bg-gray-200\" type=\"submit\">submit</button>\n")
+		P("  </div>\n")
+		P("</form>\n")
+
+		P("    </section>\n")
+		P("  </section>\n")
+		P("</section>\n")
+		printFoot(w)
+	}
+}
+
+func createbookmarkHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var err error
+		var desc string
+
+		login := getLoginUser(r, db)
+		if !validateLogin(w, login) {
+			return
+		}
+		bookid := idtoi(r.FormValue("bookid"))
+		pageid := idtoi(r.FormValue("pageid"))
+		prevpageids := r.FormValue("prevpageids")
+
+		if bookid == -1 {
+			http.Error(w, "bookid required", 401)
+			return
+		}
+		if pageid == -1 {
+			http.Error(w, "pageid required", 401)
+			return
+		}
+
+		b := queryBook(db, bookid)
+		if b == nil {
+			http.Error(w, fmt.Sprintf("bookid %d not found", bookid), 401)
+			return
+		}
+
+		var errmsg string
+		if r.Method == "POST" {
+			desc = strings.TrimSpace(r.FormValue("desc"))
+			for {
+				if desc == "" {
+					errmsg = "Please enter a bookmark description."
+					break
+				}
+
+				s := "INSERT INTO bookmark (user_id, book_id, page_id, desc) VALUES (?, ?, ?, ?)"
+				_, err = sqlexec(db, s, login.Userid, bookid, pageid, desc)
+				if err != nil {
+					log.Printf("DB error saving bookmark (%s)\n", err)
+					errmsg = "A problem occured. Please try again."
+					break
+				}
+				http.Redirect(w, r, pageUrl(b.Name, pageid, prevpageids), http.StatusSeeOther)
+				return
+			}
+		}
+
+		w.Header().Set("Content-Type", "text/html")
+		printHead(w, nil, nil)
+		printNav(w, r, db, login, b, pageid)
+
+		P := makeFprintf(w)
+		P("<section class=\"container main-container\">\n")
+		P("  <section class=\"flex flex-row justify-center\">\n")
+		P("    <section class=\"widget-1 p-4\">\n")
+		P("      <form class=\"w-createbookmark\" method=\"post\" action=\"/createbookmark/?bookid=%d&pageid=%d&prevpageids=%s\">\n", bookid, pageid, prevpageids)
+		P("      <h1 class=\"fg-1 mb-4\">Add Bookmark: <span class=\"font-bold\">%s - page %d</span></h1>", b.Name, pageid)
+		if errmsg != "" {
+			P("<div class=\"mb-2\">\n")
+			P("<p class=\"text-red-500\">%s</p>\n", errmsg)
+			P("</div>\n")
+		}
+
+		P("  <div class=\"mb-4\">\n")
+		P("    <label class=\"block label-1\" for=\"desc\">bookmark description</label>\n")
+		P("    <textarea class=\"block input-1 w-full\" id=\"desc\" name=\"desc\" rows=\"5\">%s</textarea>\n", desc)
 		P("  </div>\n")
 
 		P("  <div class=\"\">\n")

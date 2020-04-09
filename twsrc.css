@@ -44,6 +44,7 @@
 .page a {@apply link-1;}
 
 .w-editpage {width: 600px;}
+.w-createbookmark {width: 600px;}
 
 @tailwind utilities;
 
