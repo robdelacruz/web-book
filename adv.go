@@ -920,7 +920,7 @@ func printBooksMenu(w http.ResponseWriter, r *http.Request, db *sql.DB, login *U
 		P("  <div class=\"flex flex-row justify-between\">\n")
 		P("    <a class=\"block link-1 no-underline text-base\" href=\"%s\">%s</a>\n", pageUrl(b.Name, 0, ""), b.Name)
 		if login.Userid == ADMIN_ID {
-			P("    <a class=\"block link-2 text-xs\" href=\"/editbook?bookid=%d\">Edit</a>\n", b.Bookid)
+			P("    <a class=\"block link-2 text-xs self-center\" href=\"/editbook?bookid=%d\">Edit</a>\n", b.Bookid)
 		}
 		P("  </div>\n")
 		if b.Desc != "" {
