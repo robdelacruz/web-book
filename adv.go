@@ -45,6 +45,7 @@ type Page struct {
 }
 
 type Bookmark struct {
+	Bookmarkid  int64
 	Userid      int64
 	Bookid      int64
 	Pageid      int64
@@ -111,6 +112,8 @@ Initialize new book file:
 	http.HandleFunc("/createbook/", createbookHandler(db))
 	http.HandleFunc("/editbook/", editbookHandler(db))
 	http.HandleFunc("/createbookmark/", createbookmarkHandler(db))
+	http.HandleFunc("/editbookmark/", editbookmarkHandler(db))
+	http.HandleFunc("/delbookmark/", delbookmarkHandler(db))
 	http.HandleFunc("/bookmarks/", bookmarksHandler(db))
 	port := "8000"
 	fmt.Printf("Listening on %s...\n", port)
@@ -258,7 +261,7 @@ func createAndInitTables(newfile string) {
 		"CREATE TABLE page (page_id INTEGER PRIMARY KEY NOT NULL, book_id INTEGER NOT NULL, body TEXT);",
 		"CREATE TABLE user (user_id INTEGER PRIMARY KEY NOT NULL, username TEXT, password TEXT, active INTEGER NOT NULL, email TEXT, CONSTRAINT unique_username UNIQUE (username));",
 		"INSERT INTO user (user_id, username, password, active, email) VALUES (1, 'admin', '', 1, '');",
-		"CREATE TABLE bookmark (user_id INTEGER NOT NULL, book_id INTEGER NOT NULL, page_id INTEGER NOT NULL, prevpageids TEXT, desc TEXT);",
+		"CREATE TABLE bookmark (bookmark_id INTEGER PRIMARY KEY NOT NULL, user_id INTEGER NOT NULL, book_id INTEGER NOT NULL, page_id INTEGER NOT NULL, prevpageids TEXT, desc TEXT);",
 	}
 
 	tx, err := db.Begin()
@@ -505,6 +508,22 @@ func queryPage(db *sql.DB, pageid, bookid int64) *Page {
 		return nil
 	}
 	return &p
+}
+
+func queryBookmark(db *sql.DB, bookmarkid int64) *Bookmark {
+	var bm Bookmark
+
+	s := "SELECT bookmark_id, user_id, book_id, page_id, prevpageids, desc FROM bookmark WHERE bookmark_id = ?"
+	row := db.QueryRow(s, bookmarkid)
+	err := row.Scan(&bm.Bookmarkid, &bm.Userid, &bm.Bookid, &bm.Pageid, &bm.Prevpageids, &bm.Desc)
+	if err == sql.ErrNoRows {
+		return nil
+	}
+	if err != nil {
+		fmt.Printf("queryBookmark() db error (%s)\n", err)
+		return nil
+	}
+	return &bm
 }
 
 func createBook(db *sql.DB, b *Book, intro string) (int64, error) {
@@ -1516,6 +1535,156 @@ func createbookmarkHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) 
 	}
 }
 
+func editbookmarkHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var err error
+
+		login := getLoginUser(r, db)
+		if !validateLogin(w, login) {
+			return
+		}
+		bookmarkid := idtoi(r.FormValue("bookmarkid"))
+		prevpageids := r.FormValue("prevpageids")
+		frompageid := idtoi(r.FormValue("frompageid"))
+
+		bm := queryBookmark(db, bookmarkid)
+		if bm == nil {
+			http.Error(w, fmt.Sprintf("bookmark not found"), 401)
+			return
+		}
+
+		b := queryBook(db, bm.Bookid)
+		if b == nil {
+			http.Error(w, fmt.Sprintf("bookid %d not found", bm.Bookid), 401)
+			return
+		}
+
+		var errmsg string
+		if r.Method == "POST" {
+			bm.Desc = strings.TrimSpace(r.FormValue("desc"))
+			for {
+				if bm.Desc == "" {
+					errmsg = "Please enter a bookmark description."
+					break
+				}
+
+				s := "UPDATE bookmark SET desc = ? WHERE bookmark_id = ?"
+				_, err = sqlexec(db, s, bm.Desc, bookmarkid)
+				if err != nil {
+					log.Printf("DB error saving bookmark (%s)\n", err)
+					errmsg = "A problem occured. Please try again."
+					break
+				}
+				http.Redirect(w, r, fmt.Sprintf("/bookmarks?bookid=%d&prevpageids=%s&frompageid=%d", bm.Bookid, prevpageids, frompageid), http.StatusSeeOther)
+				return
+			}
+		}
+
+		w.Header().Set("Content-Type", "text/html")
+		printHead(w, nil, nil)
+		printNav(w, r, db, login, b, frompageid)
+
+		P := makeFprintf(w)
+		P("<section class=\"container main-container\">\n")
+		P("  <section class=\"flex flex-row justify-center\">\n")
+		P("    <section class=\"widget-1 p-4\">\n")
+		P("      <form class=\"w-createbookmark\" method=\"post\" action=\"/editbookmark/?bookmarkid=%d&prevpageids=%s&frompageid=%d\">\n", bookmarkid, prevpageids, frompageid)
+		P("      <h1 class=\"fg-1 mb-4\">Edit Bookmark: <span class=\"font-bold\">%s - page %d</span></h1>", b.Name, bm.Pageid)
+		if errmsg != "" {
+			P("<div class=\"mb-2\">\n")
+			P("<p class=\"text-red-500\">%s</p>\n", errmsg)
+			P("</div>\n")
+		}
+
+		P("  <div class=\"mb-4\">\n")
+		P("    <label class=\"block label-1\" for=\"desc\">bookmark description</label>\n")
+		P("    <textarea class=\"block input-1 w-full\" id=\"desc\" name=\"desc\" rows=\"5\">%s</textarea>\n", bm.Desc)
+		P("  </div>\n")
+
+		P("  <div class=\"\">\n")
+		P("    <button class=\"block btn-1 text-gray-800 bg-gray-200\" type=\"submit\">submit</button>\n")
+		P("  </div>\n")
+		P("</form>\n")
+
+		P("    </section>\n")
+		P("  </section>\n")
+		P("</section>\n")
+		printFoot(w)
+	}
+}
+
+func delbookmarkHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var err error
+
+		login := getLoginUser(r, db)
+		if !validateLogin(w, login) {
+			return
+		}
+		bookmarkid := idtoi(r.FormValue("bookmarkid"))
+		prevpageids := r.FormValue("prevpageids")
+		frompageid := idtoi(r.FormValue("frompageid"))
+
+		bm := queryBookmark(db, bookmarkid)
+		if bm == nil {
+			http.Error(w, fmt.Sprintf("bookmark not found"), 401)
+			return
+		}
+
+		b := queryBook(db, bm.Bookid)
+		if b == nil {
+			http.Error(w, fmt.Sprintf("bookid %d not found", bm.Bookid), 401)
+			return
+		}
+
+		var errmsg string
+		if r.Method == "POST" {
+			for {
+				s := "DELETE FROM BOOKMARK WHERE bookmark_id = ?"
+				_, err = sqlexec(db, s, bookmarkid)
+				if err != nil {
+					log.Printf("DB error deleting bookmark (%s)\n", err)
+					errmsg = "A problem occured. Please try again."
+					break
+				}
+				http.Redirect(w, r, fmt.Sprintf("/bookmarks?bookid=%d&prevpageids=%s&frompageid=%d", bm.Bookid, prevpageids, frompageid), http.StatusSeeOther)
+				return
+			}
+		}
+
+		w.Header().Set("Content-Type", "text/html")
+		printHead(w, nil, nil)
+		printNav(w, r, db, login, b, frompageid)
+
+		P := makeFprintf(w)
+		P("<section class=\"container main-container\">\n")
+		P("  <section class=\"flex flex-row justify-center\">\n")
+		P("    <section class=\"widget-1 p-4\">\n")
+		P("      <form class=\"w-createbookmark\" method=\"post\" action=\"/delbookmark/?bookmarkid=%d&prevpageids=%s&frompageid=%d\">\n", bookmarkid, prevpageids, frompageid)
+		P("      <h1 class=\"fg-1 mb-4\">Remove Bookmark: <span class=\"font-bold\">%s - page %d</span></h1>", b.Name, bm.Pageid)
+		if errmsg != "" {
+			P("<div class=\"mb-2\">\n")
+			P("<p class=\"text-red-500\">%s</p>\n", errmsg)
+			P("</div>\n")
+		}
+
+		P("  <div class=\"mb-4\">\n")
+		P("    <label class=\"block label-1\" for=\"desc\">bookmark description</label>\n")
+		P("    <textarea class=\"block input-1 w-full\" id=\"desc\" name=\"desc\" rows=\"5\" readonly>%s</textarea>\n", bm.Desc)
+		P("  </div>\n")
+
+		P("  <div class=\"\">\n")
+		P("    <button class=\"block btn-1 text-gray-800 bg-gray-200\" type=\"submit\">remove</button>\n")
+		P("  </div>\n")
+		P("</form>\n")
+
+		P("    </section>\n")
+		P("  </section>\n")
+		P("</section>\n")
+		printFoot(w)
+	}
+}
+
 func bookmarksHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		prevpageids := r.FormValue("prevpageids")
@@ -1538,7 +1707,7 @@ func bookmarksHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 
 		w.Header().Set("Content-Type", "text/html")
 		printHead(w, nil, nil)
-		printNav(w, r, db, login, b, 0)
+		printNav(w, r, db, login, b, frompageid)
 
 		P := makeFprintf(w)
 		P("<section class=\"container main-container\">\n")
@@ -1547,21 +1716,21 @@ func bookmarksHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		P("      <p class=\"fg-1 border-b border-gray-500 pb-1 mb-4\"><span class=\"font-bold\">%s</span> - Bookmarks</p>\n", b.Name)
 		P("      <article class=\"w-page flex-grow mb-4\">\n")
 
-		s := "SELECT book_id, page_id, prevpageids, desc FROM bookmark WHERE user_id = ? AND book_id = ? ORDER BY page_id"
+		s := "SELECT bookmark_id, book_id, page_id, prevpageids, desc FROM bookmark WHERE user_id = ? AND book_id = ? ORDER BY page_id"
 		rows, err := db.Query(s, login.Userid, bookid)
 		if handleDbErr(w, err, "bookmarkshandler") {
 			return
 		}
 		var bm Bookmark
 		for rows.Next() {
-			rows.Scan(&bm.Bookid, &bm.Pageid, &bm.Prevpageids, &bm.Desc)
+			rows.Scan(&bm.Bookmarkid, &bm.Bookid, &bm.Pageid, &bm.Prevpageids, &bm.Desc)
 			P("<div class=\"flex flex-row justify-between border-b border-gray-500 pb-1 ml-2 mb-2\">\n")
 			P("  <div class=\"text-sm mr-2\">\n")
 			P("    <a class=\"block link-1 no-underline\" href=\"%s\">%s</a>\n", pageUrl(b.Name, bm.Pageid, bm.Prevpageids), parseMarkdown(bm.Desc))
 			P("  </div>\n")
 			P("  <p class=\"flex-shrink-0\">\n")
-			P("    <a class=\"inline link-3 no-underline text-xs self-center mr-1\" href=\"/editbookmark?bookid=%d&prevpageids=%s&frompageid=%d\">Edit</a>\n", bookid, prevpageids, frompageid)
-			P("    <a class=\"inline link-3 no-underline text-xs self-center\" href=\"/delbookmark?bookid=%d&prevpageids=%s&frompageid=%d\">Remove</a>\n", bookid, prevpageids, frompageid)
+			P("    <a class=\"inline link-3 no-underline text-xs self-center mr-1\" href=\"/editbookmark?bookmarkid=%d&prevpageids=%s&frompageid=%d\">Edit</a>\n", bm.Bookmarkid, prevpageids, frompageid)
+			P("    <a class=\"inline link-3 no-underline text-xs self-center\" href=\"/delbookmark?bookmarkid=%d&prevpageids=%s&frompageid=%d\">Remove</a>\n", bm.Bookmarkid, prevpageids, frompageid)
 			P("  </p>\n")
 			P("</div>\n")
 		}
