@@ -44,6 +44,14 @@ type Page struct {
 	Body   string
 }
 
+type Bookmark struct {
+	Userid      int64
+	Bookid      int64
+	Pageid      int64
+	Prevpageids string
+	Desc        string
+}
+
 func main() {
 	os.Args = os.Args[1:]
 	sw, parms := parseArgs(os.Args)
@@ -103,6 +111,7 @@ Initialize new book file:
 	http.HandleFunc("/createbook/", createbookHandler(db))
 	http.HandleFunc("/editbook/", editbookHandler(db))
 	http.HandleFunc("/createbookmark/", createbookmarkHandler(db))
+	http.HandleFunc("/bookmarks/", bookmarksHandler(db))
 	port := "8000"
 	fmt.Printf("Listening on %s...\n", port)
 	err = http.ListenAndServe(fmt.Sprintf(":%s", port), nil)
@@ -249,7 +258,7 @@ func createAndInitTables(newfile string) {
 		"CREATE TABLE page (page_id INTEGER PRIMARY KEY NOT NULL, book_id INTEGER NOT NULL, body TEXT);",
 		"CREATE TABLE user (user_id INTEGER PRIMARY KEY NOT NULL, username TEXT, password TEXT, active INTEGER NOT NULL, email TEXT, CONSTRAINT unique_username UNIQUE (username));",
 		"INSERT INTO user (user_id, username, password, active, email) VALUES (1, 'admin', '', 1, '');",
-		"CREATE TABLE bookmark (user_id INTEGER NOT NULL, book_id INTEGER NOT NULL, page_id INTEGER NOT NULL, desc TEXT);",
+		"CREATE TABLE bookmark (user_id INTEGER NOT NULL, book_id INTEGER NOT NULL, page_id INTEGER NOT NULL, prevpageids TEXT, desc TEXT);",
 	}
 
 	tx, err := db.Begin()
@@ -918,7 +927,7 @@ func printBooksMenu(w http.ResponseWriter, r *http.Request, db *sql.DB, login *U
 		P("  <div class=\"flex flex-row justify-between\">\n")
 		P("    <a class=\"block link-1 no-underline text-base\" href=\"%s\">%s</a>\n", pageUrl(b.Name, 0, ""), b.Name)
 		if login.Userid == ADMIN_ID {
-			P("    <a class=\"block link-2 text-xs self-center\" href=\"/editbook?bookid=%d\">Edit</a>\n", b.Bookid)
+			P("    <a class=\"block link-3 text-xs self-center\" href=\"/editbook?bookid=%d\">Edit</a>\n", b.Bookid)
 		}
 		P("  </div>\n")
 		if b.Desc != "" {
@@ -965,7 +974,7 @@ func printPage(w http.ResponseWriter, r *http.Request, db *sql.DB, login *User, 
 	P("          <span class=\"fg-1 font-bold mr-2\">%s</span>\n", b.Name)
 	P("          <span class=\"fg-2 text-xs\">page %d</span>\n", pageid)
 	P("        </p>\n")
-	P("        <a class=\"block italic text-xs link-3 no-underline self-center\" href=\"/bookmarks?bookid=%d\">view bookmarks</a>\n", b.Bookid)
+	P("        <a class=\"block italic text-xs link-3 no-underline self-center\" href=\"/bookmarks?bookid=%d&prevpageids=%s&frompageid=%d\">view bookmarks</a>\n", b.Bookid, prevpageids, pageid)
 	P("      </div>\n")
 
 	P("      <article class=\"page w-page flex-grow mb-4\">\n")
@@ -989,7 +998,7 @@ func printPage(w http.ResponseWriter, r *http.Request, db *sql.DB, login *User, 
 	P("      </article>\n")
 
 	// Show 'Back' link to previous page.
-	// Get last pageid in the list. Ex. ?frompageids=1,2,3  means frompageid=3
+	// Get last pageid in the list. Ex. ?prevpageids=1,2,3  means prevpageid=3
 	var backpageid int64
 	var backprevpageids string
 	ss := strings.Split(prevpageids, ",")
@@ -1463,8 +1472,8 @@ func createbookmarkHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) 
 					break
 				}
 
-				s := "INSERT INTO bookmark (user_id, book_id, page_id, desc) VALUES (?, ?, ?, ?)"
-				_, err = sqlexec(db, s, login.Userid, bookid, pageid, desc)
+				s := "INSERT INTO bookmark (user_id, book_id, page_id, prevpageids, desc) VALUES (?, ?, ?, ?, ?)"
+				_, err = sqlexec(db, s, login.Userid, bookid, pageid, prevpageids, desc)
 				if err != nil {
 					log.Printf("DB error saving bookmark (%s)\n", err)
 					errmsg = "A problem occured. Please try again."
@@ -1504,6 +1513,70 @@ func createbookmarkHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) 
 		P("    </section>\n")
 		P("  </section>\n")
 		P("</section>\n")
+		printFoot(w)
+	}
+}
+
+func bookmarksHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		prevpageids := r.FormValue("prevpageids")
+		frompageid := r.FormValue("frompageid")
+
+		login := getLoginUser(r, db)
+		if !validateLogin(w, login) {
+			return
+		}
+		bookid := idtoi(r.FormValue("bookid"))
+		if bookid == -1 {
+			http.Error(w, "bookid required", 401)
+			return
+		}
+		b := queryBook(db, bookid)
+		if b == nil {
+			http.Error(w, fmt.Sprintf("bookid %d not found", bookid), 401)
+			return
+		}
+
+		w.Header().Set("Content-Type", "text/html")
+		printHead(w, nil, nil)
+		printNav(w, r, db, login, b, 0)
+
+		P := makeFprintf(w)
+		P("<section class=\"container main-container\">\n")
+		P("  <section class=\"flex flex-row justify-center\">\n")
+		P("    <section class=\"widget-1 widget-h flex flex-col py-4 px-8\">\n")
+		P("      <article class=\"w-page flex-grow mb-4\">\n")
+		P("        <h1 class=\"fg-1 mb-4\">Select Bookmark:</h1>\n")
+
+		s := "SELECT book_id, page_id, prevpageids, desc FROM bookmark WHERE user_id = ? AND book_id = ? ORDER BY page_id"
+		rows, err := db.Query(s, login.Userid, bookid)
+		if handleDbErr(w, err, "bookmarkshandler") {
+			return
+		}
+		var bm Bookmark
+		for rows.Next() {
+			rows.Scan(&bm.Bookid, &bm.Pageid, &bm.Prevpageids, &bm.Desc)
+			P("<div class=\"ml-2 mb-2\">\n")
+			P("  <div class=\"flex flex-row justify-between\">\n")
+			P("    <div class=\"text-sm truncate mr-2\">\n")
+			P("      <a class=\"block link-2 no-underline\" href=\"%s\">%s</a>\n", pageUrl(b.Name, bm.Pageid, bm.Prevpageids), parseMarkdown(bm.Desc))
+			P("    </div>\n")
+			P("    <p class=\"flex-shrink-0\">\n")
+			P("      <a class=\"inline link-3 text-xs self-center mr-1\" href=\"/editbookmark?bookid=%d&prevpageids=%s&frompageid=%d\">Edit</a>\n", bookid, prevpageids, frompageid)
+			P("      <a class=\"inline link-3 text-xs self-center\" href=\"/delbookmark?bookid=%d&prevpageids=%s&frompageid=%d\">Delete</a>\n", bookid, prevpageids, frompageid)
+			P("    </p>\n")
+			P("  </div>\n")
+
+			//			P("  <div class=\"text-xs fg-1\">\n")
+			//			P("%s\n", parseMarkdown(bm.Desc))
+			//			P("  </div>\n")
+			P("</div>\n")
+		}
+
+		P("    </section>\n")
+		P("  </section>\n")
+		P("</section>\n")
+
 		printFoot(w)
 	}
 }
