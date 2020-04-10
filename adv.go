@@ -620,14 +620,12 @@ func printNav(w http.ResponseWriter, r *http.Request, db *sql.DB, login *User, b
 
 	// Menu section (left part)
 	P("<div>\n")
-	P("<h1 class=\"inline mr-2\"><a href=\"/\">Game Books</a></h1>\n")
+	P("<h1 class=\"inline mr-1\"><a href=\"/\">Game Books</a></h1>\n")
 	P("<ul class=\"list-none inline\">\n")
 	if b != nil {
 		P("  <li class=\"inline mr-2\">\n")
-		P("  </li>\n")
-	}
-	if b != nil {
-		P("  <li class=\"inline text-xs\">\n")
+		prevpageids := r.FormValue("prevpageids")
+		P("<a class=\"inline italic text-xs link-3 no-underline self-center\" href=\"/bookmarks?bookid=%d&prevpageids=%s&frompageid=%d\">bookmarks</a>\n", b.Bookid, prevpageids, pageid)
 		P("  </li>\n")
 	}
 	P("</ul>\n")
@@ -636,6 +634,8 @@ func printNav(w http.ResponseWriter, r *http.Request, db *sql.DB, login *User, b
 	// User section (right part)
 	P("<div>\n")
 	P("<ul class=\"list-none inline text-xs\">\n")
+	if login.Userid != -1 {
+	}
 	if login.Userid == -1 {
 		P("<li class=\"inline\"><a href=\"/login\">login</a></li>\n")
 	} else if login.Userid == ADMIN_ID {
@@ -969,12 +969,15 @@ func printPage(w http.ResponseWriter, r *http.Request, db *sql.DB, login *User, 
 	P("<section class=\"container main-container\">\n")
 	P("  <section class=\"flex flex-row justify-center\">\n")
 	P("    <section class=\"widget-1 widget-h flex flex-col py-4 px-8\">\n")
-	P("      <div class=\"flex flex-row justify-between border-b border-gray-200 pb-1 mb-4\">\n")
+	P("      <div class=\"flex flex-row justify-between border-b border-gray-500 pb-1 mb-4\">\n")
 	P("        <p>\n")
 	P("          <span class=\"fg-1 font-bold mr-2\">%s</span>\n", b.Name)
-	P("          <span class=\"fg-2 text-xs\">page %d</span>\n", pageid)
 	P("        </p>\n")
-	P("        <a class=\"block italic text-xs link-3 no-underline self-center\" href=\"/bookmarks?bookid=%d&prevpageids=%s&frompageid=%d\">view bookmarks</a>\n", b.Bookid, prevpageids, pageid)
+	if login.Userid != -1 {
+		P("<a class=\"inline italic text-xs link-3 no-underline self-center\" href=\"/createbookmark?bookid=%d&pageid=%d&prevpageids=%s\">%d</a>\n", b.Bookid, pageid, prevpageids, pageid)
+	} else {
+		P("<span class=\"fg-2 text-xs self-center\">%d</span>\n", pageid)
+	}
 	P("      </div>\n")
 
 	P("      <article class=\"page w-page flex-grow mb-4\">\n")
@@ -1013,11 +1016,7 @@ func printPage(w http.ResponseWriter, r *http.Request, db *sql.DB, login *User, 
 	} else {
 		P("  <a class=\"block italic text-xs link-3 no-underline\" href=\"/\">&lt;&lt; Books</a>\n")
 	}
-	if login.Userid != -1 {
-		P("  <a class=\"block italic text-xs link-3 no-underline\" href=\"/createbookmark?bookid=%d&pageid=%d&prevpageids=%s\">bookmark this page</a>\n", b.Bookid, pageid, prevpageids)
-	} else {
-		P("  <div></div>\n")
-	}
+	P("  <div></div>\n") // placeholder for right side content
 	P("</div>\n")
 
 	if login.Userid == ADMIN_ID {
@@ -1520,7 +1519,7 @@ func createbookmarkHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) 
 func bookmarksHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		prevpageids := r.FormValue("prevpageids")
-		frompageid := r.FormValue("frompageid")
+		frompageid := idtoi(r.FormValue("frompageid"))
 
 		login := getLoginUser(r, db)
 		if !validateLogin(w, login) {
@@ -1545,8 +1544,8 @@ func bookmarksHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		P("<section class=\"container main-container\">\n")
 		P("  <section class=\"flex flex-row justify-center\">\n")
 		P("    <section class=\"widget-1 widget-h flex flex-col py-4 px-8\">\n")
+		P("      <p class=\"fg-1 border-b border-gray-500 pb-1 mb-4\"><span class=\"font-bold\">%s</span> - Bookmarks</p>\n", b.Name)
 		P("      <article class=\"w-page flex-grow mb-4\">\n")
-		P("        <h1 class=\"fg-1 mb-4\">Select Bookmark:</h1>\n")
 
 		s := "SELECT book_id, page_id, prevpageids, desc FROM bookmark WHERE user_id = ? AND book_id = ? ORDER BY page_id"
 		rows, err := db.Query(s, login.Userid, bookid)
@@ -1556,22 +1555,26 @@ func bookmarksHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		var bm Bookmark
 		for rows.Next() {
 			rows.Scan(&bm.Bookid, &bm.Pageid, &bm.Prevpageids, &bm.Desc)
-			P("<div class=\"ml-2 mb-2\">\n")
-			P("  <div class=\"flex flex-row justify-between\">\n")
-			P("    <div class=\"text-sm truncate mr-2\">\n")
-			P("      <a class=\"block link-2 no-underline\" href=\"%s\">%s</a>\n", pageUrl(b.Name, bm.Pageid, bm.Prevpageids), parseMarkdown(bm.Desc))
-			P("    </div>\n")
-			P("    <p class=\"flex-shrink-0\">\n")
-			P("      <a class=\"inline link-3 text-xs self-center mr-1\" href=\"/editbookmark?bookid=%d&prevpageids=%s&frompageid=%d\">Edit</a>\n", bookid, prevpageids, frompageid)
-			P("      <a class=\"inline link-3 text-xs self-center\" href=\"/delbookmark?bookid=%d&prevpageids=%s&frompageid=%d\">Delete</a>\n", bookid, prevpageids, frompageid)
-			P("    </p>\n")
+			P("<div class=\"flex flex-row justify-between border-b border-gray-500 pb-1 ml-2 mb-2\">\n")
+			P("  <div class=\"text-sm mr-2\">\n")
+			P("    <a class=\"block link-1 no-underline\" href=\"%s\">%s</a>\n", pageUrl(b.Name, bm.Pageid, bm.Prevpageids), parseMarkdown(bm.Desc))
 			P("  </div>\n")
-
-			//			P("  <div class=\"text-xs fg-1\">\n")
-			//			P("%s\n", parseMarkdown(bm.Desc))
-			//			P("  </div>\n")
+			P("  <p class=\"flex-shrink-0\">\n")
+			P("    <a class=\"inline link-3 no-underline text-xs self-center mr-1\" href=\"/editbookmark?bookid=%d&prevpageids=%s&frompageid=%d\">Edit</a>\n", bookid, prevpageids, frompageid)
+			P("    <a class=\"inline link-3 no-underline text-xs self-center\" href=\"/delbookmark?bookid=%d&prevpageids=%s&frompageid=%d\">Remove</a>\n", bookid, prevpageids, frompageid)
+			P("  </p>\n")
 			P("</div>\n")
 		}
+		P("      </article>\n")
+
+		P("<div class=\"flex flex-row justify-between pb-1\">\n")
+		if frompageid > 0 {
+			P("  <a class=\"block italic text-xs link-3 no-underline\" href=\"%s\">&lt;&lt; Back</a>\n", pageUrl(b.Name, frompageid, prevpageids))
+		} else {
+			P("  <div></div>\n")
+		}
+		P("  <div></div>\n") // placeholder for right side content
+		P("</div>\n")
 
 		P("    </section>\n")
 		P("  </section>\n")
