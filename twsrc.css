@@ -25,13 +25,15 @@
 .bg-1 {@apply bg-gray-800;}
 .bg-3 {@apply bg-gray-200;}
 .fg-1 {@apply text-gray-200;}
-.fg-2 {@apply text-green-300;}
+.fg-2 {@apply text-gray-500;}
 .fg-3 {@apply text-gray-800;}
+.fg-4 {@apply text-green-300;}
 .border-color-1 {@apply border-gray-500;}
 .bgfg-1 {@apply bg-1 fg-1;}
 
 .link-1 {@apply underline text-yellow-200;}
-.link-2 {@apply underline text-gray-200;}
+.link-2 {@apply underline fg-1;}
+.link-3 {@apply underline fg-2;}
 
 .main-container {@apply text-sm py-4 px-4;}
 .widget-1 {@apply bgfg-1 rounded-lg shadow-lg;}
@@ -48,5 +50,5 @@
 
 @tailwind utilities;
 
-.min-h-64 {min-height: 16rem;}
+.widget-h {min-height: 20rem;}
 

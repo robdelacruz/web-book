@@ -615,12 +615,10 @@ func printNav(w http.ResponseWriter, r *http.Request, db *sql.DB, login *User, b
 	P("<ul class=\"list-none inline\">\n")
 	if b != nil {
 		P("  <li class=\"inline mr-2\">\n")
-		P("    <a class=\"link-2 no-underline font-bold\" href=\"%s\">%s</a>\n", pageUrl(b.Name, 0, ""), b.Name)
 		P("  </li>\n")
 	}
 	if b != nil {
 		P("  <li class=\"inline text-xs\">\n")
-		P("    <a class=\"link-2\" href=\"/bookmarks?bookid=%d\">bookmarks</a>\n", b.Bookid)
 		P("  </li>\n")
 	}
 	P("</ul>\n")
@@ -904,7 +902,7 @@ func printBooksMenu(w http.ResponseWriter, r *http.Request, db *sql.DB, login *U
 	P := makeFprintf(w)
 	P("<section class=\"container main-container\">\n")
 	P("  <section class=\"flex flex-row justify-center\">\n")
-	P("    <section class=\"widget-1 min-h-64 flex flex-col py-4 px-8\">\n")
+	P("    <section class=\"widget-1 widget-h flex flex-col py-4 px-8\">\n")
 	P("      <article class=\"w-page flex-grow mb-4\">\n")
 	P("        <h1 class=\"fg-1 mb-4\">Select Book:</h1>\n")
 
@@ -961,11 +959,19 @@ func printPage(w http.ResponseWriter, r *http.Request, db *sql.DB, login *User, 
 	P := makeFprintf(w)
 	P("<section class=\"container main-container\">\n")
 	P("  <section class=\"flex flex-row justify-center\">\n")
-	P("    <section class=\"widget-1 min-h-64 flex flex-col py-4 px-8\">\n")
+	P("    <section class=\"widget-1 widget-h flex flex-col py-4 px-8\">\n")
+	P("      <div class=\"flex flex-row justify-between border-b border-gray-200 pb-1 mb-4\">\n")
+	P("        <p>\n")
+	P("          <span class=\"fg-1 font-bold mr-2\">%s</span>\n", b.Name)
+	P("          <span class=\"fg-2 text-xs\">page %d</span>\n", pageid)
+	P("        </p>\n")
+	P("        <a class=\"block italic text-xs link-3 no-underline self-center\" href=\"/bookmarks?bookid=%d\">view bookmarks</a>\n", b.Bookid)
+	P("      </div>\n")
+
 	P("      <article class=\"page w-page flex-grow mb-4\">\n")
 	p := queryPage(db, pageid, b.Bookid)
 	if p == nil {
-		P("<h1 class=\"fg-1 mb-4\">Page doesn't exist yet.</h1>\n")
+		P("<p class=\"fg-2\">Page doesn't exist yet.</p>\n")
 	} else {
 		var ids string
 		if prevpageids != "" {
@@ -977,7 +983,7 @@ func printPage(w http.ResponseWriter, r *http.Request, db *sql.DB, login *User, 
 		if p.Body != "" {
 			P("%s\n", parseMarkdown(p.Body))
 		} else {
-			P("<p>(Empty page)</p>\n")
+			P("<p class=\"fg-2\">(Empty page)</p>\n")
 		}
 	}
 	P("      </article>\n")
@@ -994,13 +1000,12 @@ func printPage(w http.ResponseWriter, r *http.Request, db *sql.DB, login *User, 
 
 	P("<div class=\"flex flex-row justify-between pb-1\">\n")
 	if backpageid > 0 {
-		P("  <a class=\"block italic text-xs link-2 no-underline\" href=\"%s\">&lt;&lt; Back</a>\n", pageUrl(b.Name, backpageid, backprevpageids))
+		P("  <a class=\"block italic text-xs link-3 no-underline\" href=\"%s\">&lt;&lt; Back</a>\n", pageUrl(b.Name, backpageid, backprevpageids))
 	} else {
-		P("  <a class=\"block italic text-xs link-2 no-underline\" href=\"/\">&lt;&lt; Books</a>\n")
+		P("  <a class=\"block italic text-xs link-3 no-underline\" href=\"/\">&lt;&lt; Books</a>\n")
 	}
-	P("  <p class=\"text-xs\">[%d]</p>\n", pageid)
 	if login.Userid != -1 {
-		P("  <a class=\"block italic text-xs link-2 no-underline\" href=\"/createbookmark?bookid=%d&pageid=%d&prevpageids=%s\">+bookmark</a>\n", b.Bookid, pageid, prevpageids)
+		P("  <a class=\"block italic text-xs link-3 no-underline\" href=\"/createbookmark?bookid=%d&pageid=%d&prevpageids=%s\">bookmark this page</a>\n", b.Bookid, pageid, prevpageids)
 	} else {
 		P("  <div></div>\n")
 	}
