@@ -1,5 +1,6 @@
 *.swp
 *.db
+*.o
 adv
 static/style.css
 node_modules/
