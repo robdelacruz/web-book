@@ -1,7 +1,7 @@
 all: adv static/style.css
 
 ppa:
-	apt-get install curl python-software-properties
+	apt-get install curl software-properties-common
 	curl -sL https://deb.nodesource.com/setup_13.x | sudo bash -
 	sudo apt install nodejs
 
