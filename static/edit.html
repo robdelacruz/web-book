@@ -7,23 +7,64 @@
 <link rel="stylesheet" type="text/css" href="style.css">
 </head>
 <body>
-<section class="container mx-auto text-sm py-4">
-    <section class="p-4 bg-gray-800 text-green-300 rounded-lg shadow-lg w-1/2">
-        <h1 class="text-lg text-gray-200 mb-4">Enter Page Text</h1>
-        <form class="">
-            <textarea class="block border py-2 px-3 w-full bg-gray-800 text-green-300 mb-2" rows="20">
-On the day appointed for the beginning of the race, you take the Banshee out of the towering granite bay of Tak and into the Inland Sea. Abdul the Butcher's Haveldar cuts quietly through the water beside you. Far to the east is the hostile but rich port of Lagash; to the west is the Scythera Desert, across which the caravan routes to the cities of Kish, Calah and Assur run. To the south is the mountainous isle of Enraki.
+<section class="container main-container">
+    <section class="flex flex-row justify-center">
+        <section class="widget-1 p-4 mr-4">
+            <form class="w-editpage">
+                <h1 class="fg-1 mb-4">Edit Page</h1>
+                <div class="mb-4">
+                    <label class="block label-1" for="body">text</label>
+                    <textarea class="block input-1 w-full" id="body" name="body" rows="15">
+    On the day appointed for the beginning of the race, you take the Banshee out of the towering granite bay of Tak and into the Inland Sea. Abdul the Butcher's Haveldar cuts quietly through the water beside you. Far to the east is the hostile but rich port of Lagash; to the west is the Scythera Desert, across which the caravan routes to the cities of Kish, Calah and Assur run. To the south is the mountainous isle of Enraki.
 
-Will you:
-[Head towards Lagash] for a dangerous but daring raid against its coastal shipping?
-[Travel to the Scythera Desert] to plunder the rich western caravans?
-[Patrol the Inland Sea] via the isle of Enraki?
-</textarea>
-                <button class="mx-auto block rounded p-1 bg-white text-gray-800" type="submit">Save</button>
-        </form>
+    Will you:
+    [Head towards Lagash] for a dangerous but daring raid against its coastal shipping?
+    [Travel to the Scythera Desert] to plunder the rich western caravans?
+    [Patrol the Inland Sea] via the isle of Enraki?
+                    </textarea>
+                </div>
+                <div class="">
+                    <button class="block btn-1 text-gray-800 bg-gray-200" type="submit">Save</button>
+                </div>
+            </form>
+        </section>
+
+        <section class="widget-1 flex flex-col py-4 px-8 bg-gray-200 text-gray-600">
+            <div class="flex flex-row justify-between border-b border-gray-500 pb-1 mb-4">
+                <p>
+                    <span class="font-bold mr-2">Syntax Reference</span>
+                </p>
+            </div>
+            <article class="w-help flex-grow">
+                <div class="mb-4">
+                    <p class="italic">Create a new link:</p>
+                    <code class="block pl-4">
+                        [[New link]]
+                    </code>
+                    <code class="block pl-4">
+                        A sentence with a [[new link]].
+                    </code>
+                </div>
+                <div class="mb-4">
+                    <p class="italic">Create a link to existing page:</p>
+                    <code class="block pl-4">
+                        [[Link to page=>123]]<br>
+                        A sentence with a [[link to page=>123]].
+                    </code>
+                </div>
+                <div class="mb-2">
+                    <p class="italic">Create external link:</p>
+                    <code class="block pl-4">
+                        [link text](http://en.wikipedia.org)
+                    </code>
+                </div>
+                <div class="mt-4">
+                    <p class="italic">Format text using markup:</p>
+                    <a class="block link-3 pl-4" target="_blank" href="https://daringfireball.net/projects/markdown/syntax">markdown syntax reference</a>
+                </div>
+            </article>
+        </section>
     </section>
-
-
 </section>
 </body>
 </html>

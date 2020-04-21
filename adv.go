@@ -611,12 +611,10 @@ func printHead(w io.Writer, jsurls []string, cssurls []string) {
 	}
 	P("</head>\n")
 	P("<body>\n")
-	P("<section class=\"body\">\n")
 }
 
 func printFoot(w io.Writer) {
 	P := makeFprintf(w)
-	P("</section>\n")
 	P("</body>\n")
 	P("</html>\n")
 }
@@ -1185,7 +1183,7 @@ func createpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		P := makeFprintf(w)
 		P("<section class=\"container main-container\">\n")
 		P("  <section class=\"flex flex-row justify-center\">\n")
-		P("    <section class=\"widget-1 p-4\">\n")
+		P("    <section class=\"widget-1 p-4 mr-4\">\n")
 		P("      <form class=\"w-editpage\" method=\"post\" action=\"/createpage/?bookid=%d&pageid=%d&prevpageids=%s\">\n", bookid, pageid, prevpageids)
 		P("      <h1 class=\"fg-1 mb-4\">Create Page</h1>")
 		if errmsg != "" {
@@ -1205,6 +1203,9 @@ func createpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		P("</form>\n")
 
 		P("    </section>\n")
+
+		printHelpWidget(w)
+
 		P("  </section>\n")
 		P("</section>\n")
 		printFoot(w)
@@ -1278,7 +1279,7 @@ func editpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		P := makeFprintf(w)
 		P("<section class=\"container main-container\">\n")
 		P("  <section class=\"flex flex-row justify-center\">\n")
-		P("    <section class=\"widget-1 p-4\">\n")
+		P("    <section class=\"widget-1 p-4 mr-4\">\n")
 		P("      <form class=\"w-editpage\" method=\"post\" action=\"/editpage/?bookid=%d&pageid=%d&prevpageids=%s\">\n", bookid, pageid, prevpageids)
 		P("      <h1 class=\"fg-1 mb-4\">Edit Page</h1>")
 		if errmsg != "" {
@@ -1298,10 +1299,52 @@ func editpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		P("</form>\n")
 
 		P("    </section>\n")
+
+		printHelpWidget(w)
+
 		P("  </section>\n")
 		P("</section>\n")
 		printFoot(w)
 	}
+}
+
+func printHelpWidget(w http.ResponseWriter) {
+	P := makeFprintf(w)
+	P(`<section class="widget-1 flex flex-col py-4 px-8 bg-gray-200 text-gray-600">
+            <div class="flex flex-row justify-between border-b border-gray-500 pb-1 mb-4">
+                <p>
+                    <span class="font-bold mr-2">Syntax Reference</span>
+                </p>
+            </div>
+            <article class="w-help flex-grow">
+                <div class="mb-4">
+                    <p class="italic">Create a new link:</p>
+                    <code class="block pl-4">
+                        [[New link]]
+                    </code>
+                    <code class="block pl-4">
+                        A sentence with a [[new link]].
+                    </code>
+                </div>
+                <div class="mb-4">
+                    <p class="italic">Create a link to existing page:</p>
+                    <code class="block pl-4">
+                        [[Link to page=>123]]<br>
+                        A sentence with a [[link to page=>123]].
+                    </code>
+                </div>
+                <div class="mb-2">
+                    <p class="italic">Create external link:</p>
+                    <code class="block pl-4">
+                        [link text](http://en.wikipedia.org)
+                    </code>
+                </div>
+                <div class="mt-4">
+                    <p class="italic">Format text using markup:</p>
+                    <a class="block link-3 pl-4" target="_blank" href="https://daringfireball.net/projects/markdown/syntax">markdown syntax reference</a>
+                </div>
+            </article>
+        </section>`)
 }
 
 func createbookHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
