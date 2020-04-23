@@ -1,18 +1,20 @@
 all: adv static/style.css
 
-ppa:
-	apt-get install curl software-properties-common
+apt-install:
+	sudo apt install curl software-properties-common
 	curl -sL https://deb.nodesource.com/setup_13.x | sudo bash -
 	sudo apt install nodejs
 
-dep:
-	#go get -u github.com/mattn/go-sqlite3
-	#go get -u golang.org/x/crypto/bcrypt
-	#go get -u gopkg.in/russross/blackfriday.v2
-	npm install tailwindcss
-	npm install npx
-	npm install cssnano --save-dev
-	npm install postcss-cli
+go-get:
+	go get -u github.com/mattn/go-sqlite3
+	go get -u golang.org/x/crypto/bcrypt
+	go get -u gopkg.in/russross/blackfriday.v2
+
+npm-install:
+	sudo npm install -g tailwindcss
+	sudo npm install -g npx
+	sudo npm install -g cssnano --save-dev
+	sudo npm install -g postcss-cli
 
 adv: adv.go
 	go build -o adv adv.go
