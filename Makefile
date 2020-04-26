@@ -11,17 +11,16 @@ go-get:
 	go get -u gopkg.in/russross/blackfriday.v2
 
 npm-install:
-	sudo npm install -g tailwindcss
-	sudo npm install -g npx
-	sudo npm install -g cssnano --save-dev
-	sudo npm install -g postcss-cli
+	sudo npm install -g tailwindcss --force
+	sudo npm install -g postcss-cli --force
+	sudo npm install cssnano --save-dev --force
 
 adv: adv.go
 	go build -o adv adv.go
 
 static/style.css: twsrc.css
-	npx tailwind build twsrc.css -o twsrc.o 1>/dev/null
-	npx postcss twsrc.o > static/style.css
+	tailwind build twsrc.css -o twsrc.o 1>/dev/null
+	postcss twsrc.o > static/style.css
 
 clean:
 	rm -rf adv *.o static/style.css
