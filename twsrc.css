@@ -19,7 +19,8 @@
 .widget-1 {@apply bgfg-1 rounded-lg shadow-lg;}
 .label-1 {@apply fg-1;} 
 .input-1 {@apply border border-color-1 rounded py-1 px-2 bg-1 fg-1;}
-.btn-1 {@apply mx-auto rounded py-1 px-2;} 
+.btn-1 {@apply m-auto rounded py-1 px-2;} 
+.btn-sm {@apply m-auto rounded px-2;} 
 
 .w-page {width: 400px;}
 .w-help {width: 350px;}

@@ -109,6 +109,7 @@ Initialize new book file:
 	http.HandleFunc("/editpage/", editpageHandler(db))
 	http.HandleFunc("/createbook/", createbookHandler(db))
 	http.HandleFunc("/editbook/", editbookHandler(db))
+	http.HandleFunc("/delbook/", delbookHandler(db))
 	http.HandleFunc("/createbookmark/", createbookmarkHandler(db))
 	http.HandleFunc("/editbookmark/", editbookmarkHandler(db))
 	http.HandleFunc("/delbookmark/", delbookmarkHandler(db))
@@ -950,7 +951,8 @@ func printBooksMenu(w http.ResponseWriter, r *http.Request, db *sql.DB, login *U
 		P("  <div class=\"flex flex-row justify-between\">\n")
 		P("    <a class=\"block link-1 no-underline text-base\" href=\"%s\">%s</a>\n", pageUrl(b.Name, 0, ""), b.Name)
 		if login.Userid == ADMIN_ID || authorid != 0 {
-			P("    <a class=\"block link-3 text-xs self-center\" href=\"/editbook?bookid=%d\">Edit</a>\n", b.Bookid)
+			//P("    <a class=\"block link-3 text-xs self-center\" href=\"/editbook?bookid=%d\">Edit</a>\n", b.Bookid)
+			P("    <a class=\"btn-sm text-xs self-center text-gray-800 bg-gray-400 mr-1\" href=\"/editbook?bookid=%d\">Edit</a>\n", b.Bookid)
 		}
 		P("  </div>\n")
 		if b.Desc != "" {
@@ -1410,7 +1412,7 @@ func createbookHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		P("  <section class=\"flex flex-row justify-center\">\n")
 		P("    <section class=\"widget-1 p-4\">\n")
 		P("      <form class=\"w-editpage mb-4\" method=\"post\" action=\"/createbook/\">\n")
-		P("      <h1 class=\"fg-1 mb-4\">Create Book</h1>")
+		P("      <h1 class=\"fg-1 mb-4\">New Book</h1>")
 		if errmsg != "" {
 			P("<div class=\"mb-2\">\n")
 			P("<p class=\"text-red-500\">%s</p>\n", errmsg)
@@ -1428,7 +1430,7 @@ func createbookHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		P("  </div>\n")
 
 		P("  <div class=\"\">\n")
-		P("    <button class=\"block btn-1 text-gray-800 bg-gray-200\" type=\"submit\">submit</button>\n")
+		P("    <button class=\"block btn-1 text-gray-800 bg-gray-200\" type=\"submit\">Create</button>\n")
 		P("  </div>\n")
 		P("</form>\n")
 
@@ -1490,7 +1492,10 @@ func editbookHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		P("  <section class=\"flex flex-row justify-center\">\n")
 		P("    <section class=\"widget-1 p-4\">\n")
 		P("      <form class=\"w-editpage mb-4\" method=\"post\" action=\"/editbook/?bookid=%d\">\n", bookid)
-		P("      <h1 class=\"fg-1 mb-4\">Edit Book</h1>")
+		P("      <div class=\"flex flex-row justify-between\">\n")
+		P("        <h1 class=\"flex-grow self-center fg-1 mb-4\">Book Description</h1>\n")
+		P("        <a class=\"block btn-1 text-sm self-center text-gray-400 bg-red-800\" href=\"/delbook?bookid=%d\">Delete Book</a>\n", bookid)
+		P("      </div>\n")
 		if errmsg != "" {
 			P("<div class=\"mb-2\">\n")
 			P("<p class=\"text-red-500\">%s</p>\n", errmsg)
@@ -1508,7 +1513,87 @@ func editbookHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		P("  </div>\n")
 
 		P("  <div class=\"\">\n")
-		P("    <button class=\"block btn-1 text-gray-800 bg-gray-200\" type=\"submit\">submit</button>\n")
+		P("    <button class=\"block btn-1 text-gray-800 bg-gray-200\" type=\"submit\">Update</button>\n")
+		P("  </div>\n")
+		P("</form>\n")
+
+		P("    </section>\n")
+		P("  </section>\n")
+		P("</section>\n")
+		printFoot(w)
+	}
+}
+
+func delbookHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		login := getLoginUser(r, db)
+		bookid := idtoi(r.FormValue("bookid"))
+		if bookid == -1 {
+			http.Error(w, "bookid required", 401)
+			return
+		}
+		if !queryIsBookAuthor(db, bookid, login.Userid) {
+			http.Error(w, "book author required", 401)
+			return
+		}
+
+		b := queryBook(db, bookid)
+		if b == nil {
+			http.Error(w, fmt.Sprintf("bookid %d not found", bookid), 401)
+			return
+		}
+
+		var errmsg string
+		if r.Method == "POST" {
+			for {
+				var err error
+				s := "DELETE FROM book WHERE book_id = ?"
+				_, err = sqlexec(db, s, bookid)
+				if err != nil {
+					log.Printf("DB error deleting book (%s)\n", err)
+					errmsg = "A problem occured. Please try again."
+					break
+				}
+
+				// To fully delete the book, the pagesN, bookmark, and bookauthor tables
+				// need to be deleted also.
+				// For now, let's leave them intact in case we want to restore the book.
+
+				http.Redirect(w, r, "/", http.StatusSeeOther)
+				return
+			}
+		}
+
+		w.Header().Set("Content-Type", "text/html")
+		printHead(w, nil, nil)
+		printNav(w, r, db, login, b, 0)
+
+		P := makeFprintf(w)
+		P("<section class=\"container main-container\">\n")
+		P("  <section class=\"flex flex-row justify-center\">\n")
+		P("    <section class=\"widget-1 p-4\">\n")
+		P("      <form class=\"w-editpage mb-4\" method=\"post\" action=\"/delbook/?bookid=%d\">\n", bookid)
+		P("      <div class=\"flex flex-row justify-between\">\n")
+		P("        <h1 class=\"flex-grow self-center fg-1 mb-4\">Delete Book</h1>\n")
+		P("      </div>\n")
+		if errmsg != "" {
+			P("<div class=\"mb-2\">\n")
+			P("<p class=\"text-red-500\">%s</p>\n", errmsg)
+			P("</div>\n")
+		}
+
+		P("  <div class=\"mb-2\">\n")
+		P("    <label class=\"block label-1\" for=\"name\">name</label>\n")
+		P("    <input class=\"block input-1 w-full\" id=\"name\" name=\"name\" type=\"text\" size=\"60\" value=\"%s\" readonly>\n", b.Name)
+		P("  </div>\n")
+
+		P("  <div class=\"mb-4\">\n")
+		P("    <label class=\"block label-1\" for=\"desc\">description</label>\n")
+		P("    <textarea class=\"block input-1 w-full\" id=\"desc\" name=\"desc\" rows=\"10\" readonly>%s</textarea>\n", b.Desc)
+		P("  </div>\n")
+
+		P("  <div class=\"\">\n")
+		P("    <button class=\"block btn-1 text-gray-400 bg-red-800\" type=\"submit\">Delete Book</button>\n")
 		P("  </div>\n")
 		P("</form>\n")
 
@@ -1577,7 +1662,7 @@ func createbookmarkHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) 
 		P("  <section class=\"flex flex-row justify-center\">\n")
 		P("    <section class=\"widget-1 p-4\">\n")
 		P("      <form class=\"w-createbookmark\" method=\"post\" action=\"/createbookmark/?bookid=%d&pageid=%d&prevpageids=%s\">\n", bookid, pageid, prevpageids)
-		P("      <h1 class=\"fg-1 mb-4\">Add Bookmark: <span class=\"font-bold\">%s - page %d</span></h1>", b.Name, pageid)
+		P("      <h1 class=\"fg-1 mb-4\">New Bookmark: <span class=\"font-bold\">%s - page %d</span></h1>", b.Name, pageid)
 		if errmsg != "" {
 			P("<div class=\"mb-2\">\n")
 			P("<p class=\"text-red-500\">%s</p>\n", errmsg)
@@ -1590,7 +1675,7 @@ func createbookmarkHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) 
 		P("  </div>\n")
 
 		P("  <div class=\"\">\n")
-		P("    <button class=\"block btn-1 text-gray-800 bg-gray-200\" type=\"submit\">submit</button>\n")
+		P("    <button class=\"block btn-1 text-gray-800 bg-gray-200\" type=\"submit\">Add Bookmark</button>\n")
 		P("  </div>\n")
 		P("</form>\n")
 
@@ -1668,7 +1753,7 @@ func editbookmarkHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		P("  </div>\n")
 
 		P("  <div class=\"\">\n")
-		P("    <button class=\"block btn-1 text-gray-800 bg-gray-200\" type=\"submit\">submit</button>\n")
+		P("    <button class=\"block btn-1 text-gray-800 bg-gray-200\" type=\"submit\">Save</button>\n")
 		P("  </div>\n")
 		P("</form>\n")
 
@@ -1740,7 +1825,7 @@ func delbookmarkHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		P("  </div>\n")
 
 		P("  <div class=\"\">\n")
-		P("    <button class=\"block btn-1 text-gray-800 bg-gray-200\" type=\"submit\">remove</button>\n")
+		P("    <button class=\"block btn-1 text-gray-800 bg-gray-200\" type=\"submit\">Remove</button>\n")
 		P("  </div>\n")
 		P("</form>\n")
 
