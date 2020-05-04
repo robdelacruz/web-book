@@ -258,6 +258,7 @@ func createAndInitTables(newfile string) {
 		"CREATE TABLE book (book_id INTEGER PRIMARY KEY NOT NULL, name TEXT, desc TEXT);",
 		"CREATE TABLE user (user_id INTEGER PRIMARY KEY NOT NULL, username TEXT, password TEXT, active INTEGER NOT NULL, email TEXT, CONSTRAINT unique_username UNIQUE (username));",
 		"INSERT INTO user (user_id, username, password, active, email) VALUES (1, 'admin', '', 1, '');",
+		"CREATE TABLE bookauthor (book_id INTEGER NOT NULL, user_id INTEGER NOT NULL);",
 		"CREATE TABLE bookmark (bookmark_id INTEGER PRIMARY KEY NOT NULL, user_id INTEGER NOT NULL, book_id INTEGER NOT NULL, page_id INTEGER NOT NULL, prevpageids TEXT, desc TEXT);",
 	}
 
@@ -283,7 +284,7 @@ func createAndInitTables(newfile string) {
 	_, err = createBook(db, &Book{
 		Name: "Sesame Street Adventure",
 		Desc: `Join your favorite characters - Oscar the Grouch, Big Bird, Snuffleupagus, and Mr. Hooper on a gritty, urban adventure through the mean streets of Sesame Street.`,
-	}, "")
+	}, ADMIN_ID, "")
 	if err != nil {
 		log.Printf("DB error (%s)\n", err)
 		os.Exit(1)
@@ -291,7 +292,7 @@ func createAndInitTables(newfile string) {
 	_, err = createBook(db, &Book{
 		Name: "Escape",
 		Desc: `Based on the original *Escape* book by R.A. Montgomery from the Choose Your Own Adventure Books series. You''re the star of the story, choose from 27 possible endings.`,
-	}, "")
+	}, ADMIN_ID, "")
 	if err != nil {
 		log.Printf("DB error (%s)\n", err)
 		os.Exit(1)
@@ -299,7 +300,7 @@ func createAndInitTables(newfile string) {
 	_, err = createBook(db, &Book{
 		Name: "Space Patrol",
 		Desc: `You are the commander of Space Rescue Emergency Vessel III. You have spent almost six months alone in space, and your only companion is your computer, Henry. You are steering your ship through a meteorite shower when an urgent signal comes from headquarters- a ship in your sector is under attack by space pirates!`,
-	}, "")
+	}, ADMIN_ID, "")
 	if err != nil {
 		log.Printf("DB error (%s)\n", err)
 		os.Exit(1)
@@ -307,7 +308,7 @@ func createAndInitTables(newfile string) {
 	_, err = createBook(db, &Book{
 		Name: "Prisoner of the Ant People",
 		Desc: `R. A. Montgomery takes YOU on an otherworldly adventure as you fight off the the feared Ant People, who have recently joined forces with the Evil Power Master.`,
-	}, "")
+	}, ADMIN_ID, "")
 	if err != nil {
 		log.Printf("DB error (%s)\n", err)
 		os.Exit(1)
@@ -315,7 +316,7 @@ func createAndInitTables(newfile string) {
 	_, err = createBook(db, &Book{
 		Name: "War with the Evil Power Master",
 		Desc: `You are the commander of the Lacoonian System Rapid Force response team, in charge of protecting all planets in the System. You learn that the Evil Power Master has zeroed in on three planets and plans to destroy them. The safety of the Lacoonian System depends on you!`,
-	}, "")
+	}, ADMIN_ID, "")
 	if err != nil {
 		log.Printf("DB error (%s)\n", err)
 		os.Exit(1)
@@ -527,7 +528,7 @@ func pagetblName(bookid int64) string {
 	return fmt.Sprintf("pages%d", bookid)
 }
 
-func createBook(db *sql.DB, b *Book, intro string) (int64, error) {
+func createBook(db *sql.DB, b *Book, userid int64, intro string) (int64, error) {
 	tx, err := db.Begin()
 	if err != nil {
 		return 0, err
@@ -546,6 +547,12 @@ func createBook(db *sql.DB, b *Book, intro string) (int64, error) {
 
 	s = fmt.Sprintf("CREATE TABLE %s (page_id INTEGER PRIMARY KEY NOT NULL, body TEXT)", pagetbl)
 	result, err = txexec(tx, s)
+	if handleTxErr(tx, err) {
+		return 0, err
+	}
+
+	s = "INSERT INTO bookauthor (book_id, user_id) VALUES (?, ?)"
+	result, err = txexec(tx, s, bookid, userid)
 	if handleTxErr(tx, err) {
 		return 0, err
 	}
@@ -930,18 +937,19 @@ func printBooksMenu(w http.ResponseWriter, r *http.Request, db *sql.DB, login *U
 	P("      <article class=\"w-page flex-grow mb-4\">\n")
 	P("        <h1 class=\"fg-1 mb-4\">Select Book:</h1>\n")
 
-	s := "SELECT book_id, name, desc FROM book ORDER BY book_id"
-	rows, err := db.Query(s)
+	s := "SELECT DISTINCT b.book_id, b.name, b.desc, IFNULL(ba.user_id, 0) AS user_id FROM book b LEFT OUTER JOIN bookauthor ba ON ba.book_id = b.book_id AND ba.user_id = ? ORDER BY b.book_id"
+	rows, err := db.Query(s, login.Userid)
 	if handleDbErr(w, err, "indexhandler") {
 		return
 	}
 	var b Book
+	var authorid int64
 	for rows.Next() {
-		rows.Scan(&b.Bookid, &b.Name, &b.Desc)
+		rows.Scan(&b.Bookid, &b.Name, &b.Desc, &authorid)
 		P("<div class=\"ml-2 mb-4\">\n")
 		P("  <div class=\"flex flex-row justify-between\">\n")
 		P("    <a class=\"block link-1 no-underline text-base\" href=\"%s\">%s</a>\n", pageUrl(b.Name, 0, ""), b.Name)
-		if login.Userid == ADMIN_ID {
+		if login.Userid == ADMIN_ID || authorid != 0 {
 			P("    <a class=\"block link-3 text-xs self-center\" href=\"/editbook?bookid=%d\">Edit</a>\n", b.Bookid)
 		}
 		P("  </div>\n")
@@ -954,7 +962,7 @@ func printBooksMenu(w http.ResponseWriter, r *http.Request, db *sql.DB, login *U
 	}
 	P("      </article>\n")
 
-	if login.Userid == ADMIN_ID {
+	if login.Userid != -1 {
 		P("<div class=\"flex flex-row justify-around bg-3 fg-3 p-1\">\n")
 		P("  <ul class=\"list-none text-xs\">\n")
 		P("    <li class=\"inline\"><a class=\"underline mr-2\" href=\"/createbook/\">Create Book</a></li>\n")
@@ -1034,7 +1042,7 @@ func printPage(w http.ResponseWriter, r *http.Request, db *sql.DB, login *User, 
 	P("  <div></div>\n") // placeholder for right side content
 	P("</div>\n")
 
-	if login.Userid == ADMIN_ID {
+	if queryIsBookAuthor(db, b.Bookid, login.Userid) {
 		P("<div class=\"flex flex-row justify-around bg-3 fg-3 p-1\">\n")
 		P("  <ul class=\"list-none text-xs\">\n")
 		if p == nil {
@@ -1111,6 +1119,24 @@ func parseMarkdown(s string) string {
 	return string(blackfriday.Run([]byte(s), blackfriday.WithExtensions(blackfriday.HardLineBreak)))
 }
 
+func queryIsBookAuthor(db *sql.DB, bookid, userid int64) bool {
+	if userid == ADMIN_ID {
+		return true
+	}
+
+	s := "SELECT user_id FROM bookauthor WHERE book_id = ? AND user_id = ?"
+	row := db.QueryRow(s, bookid, userid)
+	err := row.Scan(&userid)
+	if err == sql.ErrNoRows {
+		return false
+	}
+	if err != nil {
+		fmt.Printf("queryIsBookAuthor() db error (%s)\n", err)
+		return false
+	}
+	return true
+}
+
 func createpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
@@ -1121,12 +1147,12 @@ func createpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		pageid := idtoi(r.FormValue("pageid"))
 		prevpageids := r.FormValue("prevpageids")
 
-		if login.Userid != ADMIN_ID {
-			http.Error(w, "admin user required", 401)
-			return
-		}
 		if bookid == -1 {
 			http.Error(w, "bookid required", 401)
+			return
+		}
+		if !queryIsBookAuthor(db, bookid, login.Userid) {
+			http.Error(w, "book author required", 401)
 			return
 		}
 		if pageid > 0 {
@@ -1220,12 +1246,12 @@ func editpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		pageid := idtoi(r.FormValue("pageid"))
 		prevpageids := r.FormValue("prevpageids")
 
-		if login.Userid != ADMIN_ID {
-			http.Error(w, "admin user required", 401)
-			return
-		}
 		if bookid == -1 {
 			http.Error(w, "bookid required", 401)
+			return
+		}
+		if !queryIsBookAuthor(db, bookid, login.Userid) {
+			http.Error(w, "book author required", 401)
 			return
 		}
 		if pageid == -1 {
@@ -1349,10 +1375,8 @@ func printHelpWidget(w http.ResponseWriter) {
 func createbookHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var b Book
-
 		login := getLoginUser(r, db)
-		if login.Userid != ADMIN_ID {
-			http.Error(w, "admin user required", 401)
+		if !validateLogin(w, login) {
 			return
 		}
 
@@ -1366,7 +1390,7 @@ func createbookHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 					break
 				}
 
-				_, err := createBook(db, &b, "")
+				_, err := createBook(db, &b, login.Userid, "")
 				if err != nil {
 					log.Printf("Error saving book (%s)\n", err)
 					errmsg = "A problem occured. Please try again."
@@ -1418,16 +1442,16 @@ func createbookHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 func editbookHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		login := getLoginUser(r, db)
-		if login.Userid != ADMIN_ID {
-			http.Error(w, "admin user required", 401)
-			return
-		}
-
 		bookid := idtoi(r.FormValue("bookid"))
 		if bookid == -1 {
 			http.Error(w, "bookid required", 401)
 			return
 		}
+		if !queryIsBookAuthor(db, bookid, login.Userid) {
+			http.Error(w, "book author required", 401)
+			return
+		}
+
 		b := queryBook(db, bookid)
 		if b == nil {
 			http.Error(w, fmt.Sprintf("bookid %d not found", bookid), 401)
