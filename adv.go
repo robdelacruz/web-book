@@ -32,15 +32,13 @@ type Site struct {
 }
 
 type Book struct {
-	Bookid      int64
-	Name        string
-	Desc        string
-	Startpageid int64
+	Bookid int64
+	Name   string
+	Desc   string
 }
 
 type Page struct {
 	Pageid int64
-	Bookid int64
 	Body   string
 }
 
@@ -257,8 +255,7 @@ func createAndInitTables(newfile string) {
 	}
 
 	ss := []string{
-		"CREATE TABLE book (book_id INTEGER PRIMARY KEY NOT NULL, name TEXT, desc TEXT, startpage_id INTEGER DEFAULT 0);",
-		"CREATE TABLE page (page_id INTEGER PRIMARY KEY NOT NULL, book_id INTEGER NOT NULL, body TEXT);",
+		"CREATE TABLE book (book_id INTEGER PRIMARY KEY NOT NULL, name TEXT, desc TEXT);",
 		"CREATE TABLE user (user_id INTEGER PRIMARY KEY NOT NULL, username TEXT, password TEXT, active INTEGER NOT NULL, email TEXT, CONSTRAINT unique_username UNIQUE (username));",
 		"INSERT INTO user (user_id, username, password, active, email) VALUES (1, 'admin', '', 1, '');",
 		"CREATE TABLE bookmark (bookmark_id INTEGER PRIMARY KEY NOT NULL, user_id INTEGER NOT NULL, book_id INTEGER NOT NULL, page_id INTEGER NOT NULL, prevpageids TEXT, desc TEXT);",
@@ -465,9 +462,9 @@ func validateLogin(w http.ResponseWriter, login *User) bool {
 func queryBook(db *sql.DB, bookid int64) *Book {
 	var b Book
 
-	s := "SELECT book_id, name, desc, startpage_id FROM book WHERE book_id = ?"
+	s := "SELECT book_id, name, desc FROM book WHERE book_id = ?"
 	row := db.QueryRow(s, bookid)
-	err := row.Scan(&b.Bookid, &b.Name, &b.Desc, &b.Startpageid)
+	err := row.Scan(&b.Bookid, &b.Name, &b.Desc)
 	if err == sql.ErrNoRows {
 		return nil
 	}
@@ -481,9 +478,9 @@ func queryBook(db *sql.DB, bookid int64) *Book {
 func queryBookName(db *sql.DB, name string) *Book {
 	var b Book
 
-	s := "SELECT book_id, name, desc, startpage_id FROM book WHERE name = ?"
+	s := "SELECT book_id, name, desc FROM book WHERE name = ?"
 	row := db.QueryRow(s, name)
-	err := row.Scan(&b.Bookid, &b.Name, &b.Desc, &b.Startpageid)
+	err := row.Scan(&b.Bookid, &b.Name, &b.Desc)
 	if err == sql.ErrNoRows {
 		return nil
 	}
@@ -497,8 +494,8 @@ func queryBookName(db *sql.DB, name string) *Book {
 func queryPage(db *sql.DB, pageid, bookid int64) *Page {
 	var p Page
 
-	s := "SELECT page_id, body FROM page WHERE page_id = ? AND book_id = ?"
-	row := db.QueryRow(s, pageid, bookid)
+	s := fmt.Sprintf("SELECT page_id, body FROM %s WHERE page_id = ?", pagetblName(bookid))
+	row := db.QueryRow(s, pageid)
 	err := row.Scan(&p.Pageid, &p.Body)
 	if err == sql.ErrNoRows {
 		return nil
@@ -526,24 +523,18 @@ func queryBookmark(db *sql.DB, bookmarkid int64) *Bookmark {
 	return &bm
 }
 
+func pagetblName(bookid int64) string {
+	return fmt.Sprintf("pages%d", bookid)
+}
+
 func createBook(db *sql.DB, b *Book, intro string) (int64, error) {
 	tx, err := db.Begin()
 	if err != nil {
 		return 0, err
 	}
 
-	s := "INSERT INTO page (book_id, body) VALUES (?, ?)"
-	result, err := txexec(tx, s, 0, intro)
-	if handleTxErr(tx, err) {
-		return 0, err
-	}
-	pageid, err := result.LastInsertId()
-	if handleTxErr(tx, err) {
-		return 0, err
-	}
-
-	s = "INSERT INTO book (name, desc, startpage_id) VALUES (?, ?, ?)"
-	result, err = txexec(tx, s, b.Name, b.Desc, pageid)
+	s := "INSERT INTO book (name, desc) VALUES (?, ?)"
+	result, err := txexec(tx, s, b.Name, b.Desc)
 	if handleTxErr(tx, err) {
 		return 0, err
 	}
@@ -551,9 +542,16 @@ func createBook(db *sql.DB, b *Book, intro string) (int64, error) {
 	if handleTxErr(tx, err) {
 		return 0, err
 	}
+	pagetbl := pagetblName(bookid)
 
-	s = "UPDATE page SET book_id = ? WHERE page_id = ?"
-	result, err = txexec(tx, s, bookid, pageid)
+	s = fmt.Sprintf("CREATE TABLE %s (page_id INTEGER PRIMARY KEY NOT NULL, body TEXT)", pagetbl)
+	result, err = txexec(tx, s)
+	if handleTxErr(tx, err) {
+		return 0, err
+	}
+
+	s = fmt.Sprintf("INSERT INTO %s (page_id, body) VALUES (?, ?)", pagetbl)
+	result, err = txexec(tx, s, 1, intro)
 	if handleTxErr(tx, err) {
 		return 0, err
 	}
@@ -567,8 +565,8 @@ func createBook(db *sql.DB, b *Book, intro string) (int64, error) {
 }
 
 func createPage(db *sql.DB, bookid int64) (int64, error) {
-	s := "INSERT INTO page (book_id, body) VALUES (?, ?)"
-	result, err := sqlexec(db, s, bookid, "")
+	s := fmt.Sprintf("INSERT INTO %s (body) VALUES (?)", pagetblName(bookid))
+	result, err := sqlexec(db, s, "")
 	if err != nil {
 		return 0, err
 	}
@@ -973,7 +971,7 @@ func printBooksMenu(w http.ResponseWriter, r *http.Request, db *sql.DB, login *U
 
 func printPage(w http.ResponseWriter, r *http.Request, db *sql.DB, login *User, b *Book, pageid int64) {
 	if pageid == 0 {
-		pageid = b.Startpageid
+		pageid = 1
 	}
 
 	prevpageids := r.FormValue("prevpageids")
@@ -1157,13 +1155,14 @@ func createpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 					return
 				}
 
+				pagetbl := pagetblName(bookid)
 				var result sql.Result
 				if pageid > 0 {
-					s := "INSERT INTO page (page_id, book_id, body) VALUES (?, ?, ?)"
-					result, err = sqlexec(db, s, pageid, bookid, body)
+					s := fmt.Sprintf("INSERT INTO %s (page_id, body) VALUES (?, ?)", pagetbl)
+					result, err = sqlexec(db, s, pageid, body)
 				} else {
-					s := "INSERT INTO page (book_id, body) VALUES (?, ?)"
-					result, err = sqlexec(db, s, bookid, body)
+					s := fmt.Sprintf("INSERT INTO %s (body) VALUES (?)", pagetbl)
+					result, err = sqlexec(db, s, body)
 				}
 				if err != nil {
 					log.Printf("DB error saving page (%s)\n", err)
@@ -1260,7 +1259,7 @@ func editpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 				}
 
 				var err error
-				s := "UPDATE page SET body = ? WHERE page_id = ?"
+				s := fmt.Sprintf("UPDATE %s SET body = ? WHERE page_id = ?", pagetblName(bookid))
 				_, err = sqlexec(db, s, p.Body, p.Pageid)
 				if err != nil {
 					log.Printf("DB error saving page (%s)\n", err)
