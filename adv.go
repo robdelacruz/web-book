@@ -935,8 +935,13 @@ func printBooksMenu(w http.ResponseWriter, r *http.Request, db *sql.DB, login *U
 	P("<section class=\"container main-container\">\n")
 	P("  <section class=\"flex flex-row justify-center\">\n")
 	P("    <section class=\"widget-1 widget-h flex flex-col py-4 px-8\">\n")
-	P("      <article class=\"w-page flex-grow mb-4\">\n")
-	P("        <h1 class=\"fg-1 mb-4\">Select Book:</h1>\n")
+	P("      <article class=\"w-page flex-grow\">\n")
+	P("        <div class=\"flex flex-row justify-between\">\n")
+	P("          <h1 class=\"fg-1\">Select Book:</h1>\n")
+	if login.Userid != -1 {
+		P("          <a class=\"btn-sm text-xs self-center text-gray-800 bg-gray-400\" href=\"/createbook/\">Create Book</a>\n")
+	}
+	P("        </div>\n")
 
 	s := "SELECT DISTINCT b.book_id, b.name, b.desc, IFNULL(ba.user_id, 0) AS user_id FROM book b LEFT OUTER JOIN bookauthor ba ON ba.book_id = b.book_id AND ba.user_id = ? ORDER BY b.book_id"
 	rows, err := db.Query(s, login.Userid)
@@ -947,30 +952,25 @@ func printBooksMenu(w http.ResponseWriter, r *http.Request, db *sql.DB, login *U
 	var authorid int64
 	for rows.Next() {
 		rows.Scan(&b.Bookid, &b.Name, &b.Desc, &authorid)
-		P("<div class=\"ml-2 mb-4\">\n")
-		P("  <div class=\"flex flex-row justify-between\">\n")
-		P("    <a class=\"block link-1 no-underline text-base\" href=\"%s\">%s</a>\n", pageUrl(b.Name, 0, ""), b.Name)
-		if login.Userid == ADMIN_ID || authorid != 0 {
-			//P("    <a class=\"block link-3 text-xs self-center\" href=\"/editbook?bookid=%d\">Edit</a>\n", b.Bookid)
-			P("    <a class=\"btn-sm text-xs self-center text-gray-800 bg-gray-400 mr-1\" href=\"/editbook?bookid=%d\">Edit</a>\n", b.Bookid)
-		}
-		P("  </div>\n")
+		P("<div class=\"ml-2 py-4 border-b border-gray-600\">\n")
+		P("  <a class=\"block link-1 no-underline text-base\" href=\"%s\">%s</a>\n", pageUrl(b.Name, 0, ""), b.Name)
 		if b.Desc != "" {
-			P("  <div class=\"text-xs fg-1\">\n")
+			P("  <div class=\"text-xs fg-1 mb-2\">\n")
 			P("%s\n", parseMarkdown(b.Desc))
+			P("  </div>\n")
+		}
+		if login.Userid == ADMIN_ID || authorid != 0 {
+			P("  <div class=\"flex flex-row justify-between\">\n")
+			P("    <div>\n")
+			P("      <a class=\"btn-sm text-xs self-center text-gray-800 bg-gray-400 mr-1\" href=\"/editbook?bookid=%d\">Edit</a>\n", b.Bookid)
+			P("      <a class=\"btn-sm text-xs self-center text-gray-800 bg-gray-400\" href=\"/exportbook?bookid=%d\">Export</a>\n", b.Bookid)
+			P("    </div>\n")
+			P("    <a class=\"btn-sm text-xs self-center text-gray-400 bg-red-800\" href=\"/delbook?bookid=%d\">Delete</a>\n", b.Bookid)
 			P("  </div>\n")
 		}
 		P("</div>\n")
 	}
 	P("      </article>\n")
-
-	if login.Userid != -1 {
-		P("<div class=\"flex flex-row justify-around bg-3 fg-3 p-1\">\n")
-		P("  <ul class=\"list-none text-xs\">\n")
-		P("    <li class=\"inline\"><a class=\"underline mr-2\" href=\"/createbook/\">Create Book</a></li>\n")
-		P("  </ul>\n")
-		P("</div>\n")
-	}
 
 	P("    </section>\n")
 	P("  </section>\n")
@@ -998,11 +998,16 @@ func printPage(w http.ResponseWriter, r *http.Request, db *sql.DB, login *User, 
 	P("        <p>\n")
 	P("          <span class=\"fg-1 font-bold mr-2\">%s</span>\n", b.Name)
 	P("        </p>\n")
+	P("        <div>\n")
+	if queryIsBookAuthor(db, b.Bookid, login.Userid) {
+		P("<a class=\"btn-sm text-xs self-center text-gray-800 bg-gray-400 mr-1\" href=\"/editpage?bookid=%d&pageid=%d&prevpageids=%s\">Edit</a>\n", b.Bookid, pageid, prevpageids)
+	}
 	if login.Userid != -1 {
 		P("<a class=\"inline italic text-xs link-3 no-underline self-center\" href=\"/createbookmark?bookid=%d&pageid=%d&prevpageids=%s\">%d</a>\n", b.Bookid, pageid, prevpageids, pageid)
 	} else {
 		P("<span class=\"fg-2 text-xs self-center\">%d</span>\n", pageid)
 	}
+	P("        </div>\n")
 	P("      </div>\n")
 
 	P("      <article class=\"page w-page flex-grow mb-4\">\n")
@@ -1043,18 +1048,6 @@ func printPage(w http.ResponseWriter, r *http.Request, db *sql.DB, login *User, 
 	}
 	P("  <div></div>\n") // placeholder for right side content
 	P("</div>\n")
-
-	if queryIsBookAuthor(db, b.Bookid, login.Userid) {
-		P("<div class=\"flex flex-row justify-around bg-3 fg-3 p-1\">\n")
-		P("  <ul class=\"list-none text-xs\">\n")
-		if p == nil {
-			P("    <li class=\"inline\"><a class=\"underline mr-2\" href=\"/createpage?bookid=%d&pageid=%d&prevpageids=%s\">Create Page</a></li>\n", b.Bookid, pageid, prevpageids)
-		} else {
-			P("    <li class=\"inline\"><a class=\"underline mr-2\" href=\"/editpage?bookid=%d&pageid=%d&prevpageids=%s\">Edit</a></li>\n", b.Bookid, pageid, prevpageids)
-		}
-		P("  </ul>\n")
-		P("</div>\n")
-	}
 
 	P("    </section>\n")
 	P("  </section>\n")
@@ -1494,7 +1487,6 @@ func editbookHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		P("      <form class=\"w-editpage mb-4\" method=\"post\" action=\"/editbook/?bookid=%d\">\n", bookid)
 		P("      <div class=\"flex flex-row justify-between\">\n")
 		P("        <h1 class=\"flex-grow self-center fg-1 mb-4\">Book Description</h1>\n")
-		P("        <a class=\"block btn-1 text-sm self-center text-gray-400 bg-red-800\" href=\"/delbook?bookid=%d\">Delete Book</a>\n", bookid)
 		P("      </div>\n")
 		if errmsg != "" {
 			P("<div class=\"mb-2\">\n")
