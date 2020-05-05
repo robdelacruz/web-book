@@ -21,9 +21,6 @@ For non-admin, the link won't be displayed, indicating that the target page isn'
 Link to page 123 explicitly:
 London has [[public transport=>123]] becomes "/bookname/123"
 
-
-
-
 # URL structure:
 
 /<book>/<page>
@@ -48,6 +45,20 @@ gets translated to:
 <p><a href="/bridge_left_door/">Take the left door</a> beside Lt. Commander Data.</p>
 <p><a href="/bridge_conference_room/">Exit to the conference room</a> to meet with the crew.</p>
 
-
 zondicons: http://www.zondicons.com/
+
+# export book format (json):
+{
+    "name": "Space Patrol",
+    "desc": "You are the star of the story. Choose from 10 possible endings.",
+    "pages": {
+        "1": "This is the first page.\nYou are in an empty house.\n",
+        "2": "This is the second page.\nYou can go [[left=>3]] or [[right=>4]]."
+        "3": "You go left."
+        "4": "You go right.\n\n[[Go straight=>5]]."
+        "5": "This is the fifth page.\nYou can go [[back=>4]] or [[restart=>1]]."
+    }
+}
+
+Importing a book generates a new book_id into [book] and [pages_<book_id>] tables.
 
