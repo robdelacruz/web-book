@@ -746,7 +746,7 @@ func loginHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		P("        </div>\n")
 
 		P("        <div class=\"\">\n")
-		P("          <button class=\"block btn-1 fg-3 bg-3\" type=\"submit\">login</button>\n")
+		P("          <button class=\"block mx-auto btn-1 fg-3 bg-3\" type=\"submit\">login</button>\n")
 		P("        </div>\n")
 		P("      </form>\n")
 
@@ -869,7 +869,7 @@ func createaccountHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		P("</div>\n")
 
 		P("<div class=\"\">\n")
-		P("  <button class=\"block btn-1 fg-3 bg-3\">create account</button>\n")
+		P("  <button class=\"block mx-auto btn-1 fg-3 bg-3\">create account</button>\n")
 		P("</div>\n")
 		P("</form>\n")
 
@@ -1225,7 +1225,7 @@ func createpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		P("  </div>\n")
 
 		P("  <div class=\"\">\n")
-		P("    <button class=\"block btn-1 text-gray-800 bg-gray-200\" type=\"submit\">submit</button>\n")
+		P("    <button class=\"block mx-auto btn-1 text-gray-800 bg-gray-200\" type=\"submit\">submit</button>\n")
 		P("  </div>\n")
 		P("</form>\n")
 
@@ -1321,7 +1321,7 @@ func editpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		P("  </div>\n")
 
 		P("  <div class=\"\">\n")
-		P("    <button class=\"block btn-1 text-gray-800 bg-gray-200\" type=\"submit\">submit</button>\n")
+		P("    <button class=\"block mx-auto btn-1 text-gray-800 bg-gray-200\" type=\"submit\">submit</button>\n")
 		P("  </div>\n")
 		P("</form>\n")
 
@@ -1430,7 +1430,7 @@ func createbookHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		P("  </div>\n")
 
 		P("  <div class=\"\">\n")
-		P("    <button class=\"block btn-1 text-gray-800 bg-gray-200\" type=\"submit\">Create</button>\n")
+		P("    <button class=\"block mx-auto btn-1 text-gray-800 bg-gray-200\" type=\"submit\">Create</button>\n")
 		P("  </div>\n")
 		P("</form>\n")
 
@@ -1513,7 +1513,7 @@ func editbookHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		P("  </div>\n")
 
 		P("  <div class=\"\">\n")
-		P("    <button class=\"block btn-1 text-gray-800 bg-gray-200\" type=\"submit\">Update</button>\n")
+		P("    <button class=\"block mx-auto btn-1 text-gray-800 bg-gray-200\" type=\"submit\">Update</button>\n")
 		P("  </div>\n")
 		P("</form>\n")
 
@@ -1593,7 +1593,7 @@ func delbookHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		P("  </div>\n")
 
 		P("  <div class=\"\">\n")
-		P("    <button class=\"block btn-1 text-gray-400 bg-red-800\" type=\"submit\">Delete Book</button>\n")
+		P("    <button class=\"block mx-auto btn-1 text-gray-400 bg-red-800\" type=\"submit\">Delete Book</button>\n")
 		P("  </div>\n")
 		P("</form>\n")
 
@@ -1675,7 +1675,7 @@ func createbookmarkHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) 
 		P("  </div>\n")
 
 		P("  <div class=\"\">\n")
-		P("    <button class=\"block btn-1 text-gray-800 bg-gray-200\" type=\"submit\">Add Bookmark</button>\n")
+		P("    <button class=\"block mx-auto btn-1 text-gray-800 bg-gray-200\" type=\"submit\">Add Bookmark</button>\n")
 		P("  </div>\n")
 		P("</form>\n")
 
@@ -1753,7 +1753,7 @@ func editbookmarkHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		P("  </div>\n")
 
 		P("  <div class=\"\">\n")
-		P("    <button class=\"block btn-1 text-gray-800 bg-gray-200\" type=\"submit\">Save</button>\n")
+		P("    <button class=\"block mx-auto btn-1 text-gray-800 bg-gray-200\" type=\"submit\">Save</button>\n")
 		P("  </div>\n")
 		P("</form>\n")
 
@@ -1825,7 +1825,7 @@ func delbookmarkHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		P("  </div>\n")
 
 		P("  <div class=\"\">\n")
-		P("    <button class=\"block btn-1 text-gray-800 bg-gray-200\" type=\"submit\">Remove</button>\n")
+		P("    <button class=\"block mx-auto btn-1 text-gray-800 bg-gray-200\" type=\"submit\">Remove</button>\n")
 		P("  </div>\n")
 		P("</form>\n")
 
