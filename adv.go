@@ -1538,18 +1538,51 @@ func delbookHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		var errmsg string
 		if r.Method == "POST" {
 			for {
-				var err error
+				tx, err := db.Begin()
+				if err != nil {
+					log.Printf("DB error creating tx (%s)\n", err)
+					errmsg = "A problem occured. Please try again."
+					break
+				}
+
 				s := "DELETE FROM book WHERE book_id = ?"
-				_, err = sqlexec(db, s, bookid)
+				_, err = txexec(tx, s, bookid)
 				if err != nil {
 					log.Printf("DB error deleting book (%s)\n", err)
 					errmsg = "A problem occured. Please try again."
 					break
 				}
 
-				// To fully delete the book, the pagesN, bookmark, and bookauthor tables
-				// need to be deleted also.
-				// For now, let's leave them intact in case we want to restore the book.
+				s = fmt.Sprintf("DROP TABLE %s", pagetblName(bookid))
+				_, err = txexec(tx, s)
+				if err != nil {
+					log.Printf("DB error dropping pages table (%s)\n", err)
+					errmsg = "A problem occured. Please try again."
+					break
+				}
+
+				s = "DELETE FROM bookmark WHERE book_id = ?"
+				_, err = txexec(tx, s, bookid)
+				if err != nil {
+					log.Printf("DB error deleting bookmark (%s)\n", err)
+					errmsg = "A problem occured. Please try again."
+					break
+				}
+
+				s = "DELETE FROM bookauthor WHERE book_id = ?"
+				_, err = txexec(tx, s, bookid)
+				if err != nil {
+					log.Printf("DB error deleting bookauthor (%s)\n", err)
+					errmsg = "A problem occured. Please try again."
+					break
+				}
+
+				err = tx.Commit()
+				if err != nil {
+					log.Printf("DB error committing tx (%s)\n", err)
+					errmsg = "A problem occured. Please try again."
+					break
+				}
 
 				http.Redirect(w, r, "/", http.StatusSeeOther)
 				return
