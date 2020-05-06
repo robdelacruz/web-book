@@ -1740,7 +1740,7 @@ func importbookHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 				b.Desc = eb.Desc
 
 				// If another book has the same name, rename to
-				// "Book Name (1)", "Book Name (2)", etc to make name unique.
+				// "Book Name -- 1", "Book Name -- 2", etc to make name unique.
 				i := 1
 				for {
 					foundb, err := queryBookName(db, b.Name)
@@ -1751,7 +1751,7 @@ func importbookHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 						break
 					}
 
-					b.Name = fmt.Sprintf("%s (%d)", eb.Name, i)
+					b.Name = fmt.Sprintf("%s -- %d", eb.Name, i)
 					i++
 				}
 
