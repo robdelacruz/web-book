@@ -2,8 +2,10 @@ package main
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"net/url"
@@ -49,6 +51,12 @@ type Bookmark struct {
 	Pageid      int64
 	Prevpageids string
 	Desc        string
+}
+
+type ExportBook struct {
+	Name  string            `json:"name"`
+	Desc  string            `json:"desc"`
+	Pages map[string]string `json:"pages"`
 }
 
 func main() {
@@ -110,6 +118,8 @@ Initialize new book file:
 	http.HandleFunc("/createbook/", createbookHandler(db))
 	http.HandleFunc("/editbook/", editbookHandler(db))
 	http.HandleFunc("/delbook/", delbookHandler(db))
+	http.HandleFunc("/exportbook/", exportbookHandler(db))
+	http.HandleFunc("/importbook/", importbookHandler(db))
 	http.HandleFunc("/createbookmark/", createbookmarkHandler(db))
 	http.HandleFunc("/editbookmark/", editbookmarkHandler(db))
 	http.HandleFunc("/delbookmark/", delbookmarkHandler(db))
@@ -285,7 +295,7 @@ func createAndInitTables(newfile string) {
 	_, err = createBook(db, &Book{
 		Name: "Sesame Street Adventure",
 		Desc: `Join your favorite characters - Oscar the Grouch, Big Bird, Snuffleupagus, and Mr. Hooper on a gritty, urban adventure through the mean streets of Sesame Street.`,
-	}, ADMIN_ID, "")
+	}, nil, ADMIN_ID)
 	if err != nil {
 		log.Printf("DB error (%s)\n", err)
 		os.Exit(1)
@@ -293,7 +303,7 @@ func createAndInitTables(newfile string) {
 	_, err = createBook(db, &Book{
 		Name: "Escape",
 		Desc: `Based on the original *Escape* book by R.A. Montgomery from the Choose Your Own Adventure Books series. You''re the star of the story, choose from 27 possible endings.`,
-	}, ADMIN_ID, "")
+	}, nil, ADMIN_ID)
 	if err != nil {
 		log.Printf("DB error (%s)\n", err)
 		os.Exit(1)
@@ -301,7 +311,7 @@ func createAndInitTables(newfile string) {
 	_, err = createBook(db, &Book{
 		Name: "Space Patrol",
 		Desc: `You are the commander of Space Rescue Emergency Vessel III. You have spent almost six months alone in space, and your only companion is your computer, Henry. You are steering your ship through a meteorite shower when an urgent signal comes from headquarters- a ship in your sector is under attack by space pirates!`,
-	}, ADMIN_ID, "")
+	}, nil, ADMIN_ID)
 	if err != nil {
 		log.Printf("DB error (%s)\n", err)
 		os.Exit(1)
@@ -309,7 +319,7 @@ func createAndInitTables(newfile string) {
 	_, err = createBook(db, &Book{
 		Name: "Prisoner of the Ant People",
 		Desc: `R. A. Montgomery takes YOU on an otherworldly adventure as you fight off the the feared Ant People, who have recently joined forces with the Evil Power Master.`,
-	}, ADMIN_ID, "")
+	}, nil, ADMIN_ID)
 	if err != nil {
 		log.Printf("DB error (%s)\n", err)
 		os.Exit(1)
@@ -317,7 +327,7 @@ func createAndInitTables(newfile string) {
 	_, err = createBook(db, &Book{
 		Name: "War with the Evil Power Master",
 		Desc: `You are the commander of the Lacoonian System Rapid Force response team, in charge of protecting all planets in the System. You learn that the Evil Power Master has zeroed in on three planets and plans to destroy them. The safety of the Lacoonian System depends on you!`,
-	}, ADMIN_ID, "")
+	}, nil, ADMIN_ID)
 	if err != nil {
 		log.Printf("DB error (%s)\n", err)
 		os.Exit(1)
@@ -477,20 +487,20 @@ func queryBook(db *sql.DB, bookid int64) *Book {
 	return &b
 }
 
-func queryBookName(db *sql.DB, name string) *Book {
+func queryBookName(db *sql.DB, name string) (*Book, error) {
 	var b Book
 
 	s := "SELECT book_id, name, desc FROM book WHERE name = ?"
 	row := db.QueryRow(s, name)
 	err := row.Scan(&b.Bookid, &b.Name, &b.Desc)
 	if err == sql.ErrNoRows {
-		return nil
+		return nil, nil
 	}
 	if err != nil {
 		fmt.Printf("queryBook() db error (%s)\n", err)
-		return nil
+		return nil, err
 	}
-	return &b
+	return &b, nil
 }
 
 func queryPage(db *sql.DB, pageid, bookid int64) *Page {
@@ -529,7 +539,7 @@ func pagetblName(bookid int64) string {
 	return fmt.Sprintf("pages%d", bookid)
 }
 
-func createBook(db *sql.DB, b *Book, userid int64, intro string) (int64, error) {
+func createBook(db *sql.DB, b *Book, pp []*Page, userid int64) (int64, error) {
 	tx, err := db.Begin()
 	if err != nil {
 		return 0, err
@@ -547,21 +557,23 @@ func createBook(db *sql.DB, b *Book, userid int64, intro string) (int64, error) 
 	pagetbl := pagetblName(bookid)
 
 	s = fmt.Sprintf("CREATE TABLE %s (page_id INTEGER PRIMARY KEY NOT NULL, body TEXT)", pagetbl)
-	result, err = txexec(tx, s)
+	_, err = txexec(tx, s)
 	if handleTxErr(tx, err) {
 		return 0, err
 	}
 
 	s = "INSERT INTO bookauthor (book_id, user_id) VALUES (?, ?)"
-	result, err = txexec(tx, s, bookid, userid)
+	_, err = txexec(tx, s, bookid, userid)
 	if handleTxErr(tx, err) {
 		return 0, err
 	}
 
-	s = fmt.Sprintf("INSERT INTO %s (page_id, body) VALUES (?, ?)", pagetbl)
-	result, err = txexec(tx, s, 1, intro)
-	if handleTxErr(tx, err) {
-		return 0, err
+	s = fmt.Sprintf("INSERT INTO %s (page_id, body) VALUES (?, ?)", pagetblName(bookid))
+	for _, p := range pp {
+		_, err = txexec(tx, s, p.Pageid, p.Body)
+		if handleTxErr(tx, err) {
+			return 0, err
+		}
 	}
 
 	err = tx.Commit()
@@ -633,7 +645,7 @@ func printNav(w http.ResponseWriter, r *http.Request, db *sql.DB, login *User, b
 		var bookName string
 		bookName, pageid = parseBookPageUrl(r.URL.Path)
 		if bookName != "" {
-			b = queryBookName(db, bookName)
+			b, _ = queryBookName(db, bookName)
 		}
 	}
 
@@ -916,7 +928,7 @@ func indexHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 			return
 		}
 
-		b := queryBookName(db, bookName)
+		b, _ := queryBookName(db, bookName)
 		if b == nil {
 			http.Error(w, fmt.Sprintf("'%s' not found.", bookName), 404)
 			return
@@ -938,9 +950,12 @@ func printBooksMenu(w http.ResponseWriter, r *http.Request, db *sql.DB, login *U
 	P("      <article class=\"w-page flex-grow\">\n")
 	P("        <div class=\"flex flex-row justify-between\">\n")
 	P("          <h1 class=\"fg-1\">Select Book:</h1>\n")
+	P("          <div>\n")
 	if login.Userid != -1 {
-		P("          <a class=\"btn-sm text-xs self-center text-gray-800 bg-gray-400\" href=\"/createbook/\">Create Book</a>\n")
+		P("          <a class=\"btn-sm text-xs self-center text-gray-800 bg-gray-400 mr-1\" href=\"/createbook/\">Create Book</a>\n")
+		P("          <a class=\"btn-sm text-xs self-center text-gray-800 bg-gray-400\" href=\"/importbook/\">Import</a>\n")
 	}
+	P("          </div>\n")
 	P("        </div>\n")
 
 	s := "SELECT DISTINCT b.book_id, b.name, b.desc, IFNULL(ba.user_id, 0) AS user_id FROM book b LEFT OUTER JOIN bookauthor ba ON ba.book_id = b.book_id AND ba.user_id = ? ORDER BY b.book_id"
@@ -963,7 +978,7 @@ func printBooksMenu(w http.ResponseWriter, r *http.Request, db *sql.DB, login *U
 			P("  <div class=\"flex flex-row justify-between\">\n")
 			P("    <div>\n")
 			P("      <a class=\"btn-sm text-xs self-center text-gray-800 bg-gray-400 mr-1\" href=\"/editbook?bookid=%d\">Edit</a>\n", b.Bookid)
-			P("      <a class=\"btn-sm text-xs self-center text-gray-800 bg-gray-400\" href=\"/exportbook?bookid=%d\">Export</a>\n", b.Bookid)
+			P("      <a class=\"btn-sm text-xs self-center text-gray-800 bg-gray-400\" href=\"/exportbook?bookid=%d\" download=\"%s\" target=\"_blank\">Export</a>\n", b.Bookid, strings.Replace(b.Name, " ", "_", -1))
 			P("    </div>\n")
 			P("    <a class=\"btn-sm text-xs self-center text-gray-400 bg-red-800\" href=\"/delbook?bookid=%d\">Delete</a>\n", b.Bookid)
 			P("  </div>\n")
@@ -1263,8 +1278,8 @@ func editpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		}
 		p := queryPage(db, pageid, bookid)
 		if p == nil {
-			http.Error(w, fmt.Sprintf("pageid %d not found", pageid), 401)
-			return
+			p = &Page{}
+			p.Pageid = pageid
 		}
 
 		var errmsg string
@@ -1283,8 +1298,8 @@ func editpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 				}
 
 				var err error
-				s := fmt.Sprintf("UPDATE %s SET body = ? WHERE page_id = ?", pagetblName(bookid))
-				_, err = sqlexec(db, s, p.Body, p.Pageid)
+				s := fmt.Sprintf("REPLACE INTO %s (page_id, body) VALUES (?, ?)", pagetblName(bookid))
+				_, err = sqlexec(db, s, p.Pageid, p.Body)
 				if err != nil {
 					log.Printf("DB error saving page (%s)\n", err)
 					errmsg = "A problem occured. Please try again."
@@ -1388,7 +1403,7 @@ func createbookHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 					break
 				}
 
-				_, err := createBook(db, &b, login.Userid, "")
+				_, err := createBook(db, &b, nil, login.Userid)
 				if err != nil {
 					log.Printf("Error saving book (%s)\n", err)
 					errmsg = "A problem occured. Please try again."
@@ -1622,6 +1637,165 @@ func delbookHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 
 		P("  <div class=\"\">\n")
 		P("    <button class=\"block mx-auto btn-1 text-gray-400 bg-red-800\" type=\"submit\">Delete Book</button>\n")
+		P("  </div>\n")
+		P("</form>\n")
+
+		P("    </section>\n")
+		P("  </section>\n")
+		P("</section>\n")
+		printFoot(w)
+	}
+}
+
+func exportbookHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		login := getLoginUser(r, db)
+		bookid := idtoi(r.FormValue("bookid"))
+		if bookid == -1 {
+			http.Error(w, "bookid required", 401)
+			return
+		}
+		if !queryIsBookAuthor(db, bookid, login.Userid) {
+			http.Error(w, "book author required", 401)
+			return
+		}
+
+		b := queryBook(db, bookid)
+		if b == nil {
+			http.Error(w, fmt.Sprintf("bookid %d not found", bookid), 401)
+			return
+		}
+
+		eb := ExportBook{}
+		eb.Name = b.Name
+		eb.Desc = b.Desc
+		eb.Pages = map[string]string{}
+
+		s := fmt.Sprintf("SELECT page_id, body FROM %s ORDER BY page_id", pagetblName(bookid))
+		rows, err := db.Query(s)
+		if handleDbErr(w, err, "exportbookhandler") {
+			return
+		}
+		var p Page
+		for rows.Next() {
+			rows.Scan(&p.Pageid, &p.Body)
+			eb.Pages[strconv.FormatInt(p.Pageid, 10)] = p.Body
+		}
+
+		bs, err := json.MarshalIndent(eb, "", "\t")
+		if err != nil {
+			fmt.Printf("JSON Marshal error exporting book (%s)\n", err)
+			http.Error(w, "Server error exporting book.", 500)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Disposition", fmt.Sprintf("inline; filename=\"%s.json\"", strings.Replace(b.Name, " ", "_", -1)))
+		P := makeFprintf(w)
+		P(string(bs))
+	}
+}
+
+func importbookHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		login := getLoginUser(r, db)
+		if !validateLogin(w, login) {
+			return
+		}
+
+		var errmsg string
+		if r.Method == "POST" {
+			for {
+				file, header, err := r.FormFile("file")
+				if file != nil {
+					defer file.Close()
+				}
+				if header == nil {
+					errmsg = "Please select a file to upload."
+					break
+				}
+				if err != nil {
+					log.Printf("importbookhandler: IO error reading file: %s\n", err)
+					errmsg = "A problem occured. Please try again."
+					break
+				}
+
+				bs, err := ioutil.ReadAll(file)
+				if err != nil {
+					log.Printf("importbookhandler: IO error reading file: %s\n", err)
+					errmsg = "A problem occured. Please try again."
+					break
+				}
+
+				var eb ExportBook
+				err = json.Unmarshal(bs, &eb)
+				if err != nil {
+					log.Printf("importbookhandler: Error unmarshaling file: %s\n", err)
+					errmsg = "Book cannot be read from file. Please try again."
+					break
+				}
+
+				var b Book
+				b.Name = eb.Name
+				b.Desc = eb.Desc
+
+				// If another book has the same name, rename to
+				// "Book Name (1)", "Book Name (2)", etc to make name unique.
+				i := 1
+				for {
+					foundb, err := queryBookName(db, b.Name)
+					if handleDbErr(w, err, "importbookhandler") {
+						return
+					}
+					if foundb == nil {
+						break
+					}
+
+					b.Name = fmt.Sprintf("%s (%d)", eb.Name, i)
+					i++
+				}
+
+				var pp []*Page
+				for k, body := range eb.Pages {
+					pageid := idtoi(k)
+					pp = append(pp, &Page{Pageid: pageid, Body: body})
+				}
+
+				_, err = createBook(db, &b, pp, login.Userid)
+				if err != nil {
+					log.Printf("Error creating book (%s)\n", err)
+					errmsg = "A problem occured. Please try again."
+					break
+				}
+
+				http.Redirect(w, r, "/", http.StatusSeeOther)
+				return
+			}
+		}
+
+		w.Header().Set("Content-Type", "text/html")
+		printHead(w, nil, nil)
+		printNav(w, r, db, login, nil, 0)
+
+		P := makeFprintf(w)
+		P("<section class=\"container main-container\">\n")
+		P("  <section class=\"flex flex-row justify-center\">\n")
+		P("    <section class=\"widget-1 p-4\">\n")
+		P("      <form class=\"w-editpage mb-4\" method=\"post\" action=\"/importbook/\" enctype=\"multipart/form-data\">\n")
+		P("      <h1 class=\"fg-1 mb-4\">Import Book</h1>")
+		if errmsg != "" {
+			P("<div class=\"mb-2\">\n")
+			P("<p class=\"text-red-500\">%s</p>\n", errmsg)
+			P("</div>\n")
+		}
+
+		P("  <div class=\"mb-2\">\n")
+		P("    <label class=\"block label-1\" for=\"file\">select file</label>\n")
+		P("    <input class=\"block input-1 w-full\" id=\"file\" name=\"file\" type=\"file\">\n")
+		P("  </div>\n")
+
+		P("  <div class=\"\">\n")
+		P("    <button class=\"block mx-auto btn-1 text-gray-800 bg-gray-200\" type=\"submit\">Import File</button>\n")
 		P("  </div>\n")
 		P("</form>\n")
 
