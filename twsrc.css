@@ -24,8 +24,19 @@
 
 .w-page {width: 400px;}
 .w-help {width: 350px;}
-.page p, .page ul {@apply mb-2;}
+.page h1, .page h2, .page h3, .page h4 {@apply text-lg;}
+.page p, .page ul, .page ol {@apply mb-2;}
 .page a {@apply link-1;}
+.page ul {@apply list-disc list-inside;}
+.page ol {@apply list-decimal list-inside;}
+.page blockquote {@apply ml-6;}
+.page pre {@apply font-mono bg-gray-700 p-2;}
+.page img[src*="#thumb"] {width: 100px;}
+.page img[src*="#sm"] {width: 150px;}
+.page img[src*="#lg"] {width: 200px;}
+.page img[src*="#xl"] {width: 300px;}
+.page img[src*="#left"] {@apply float-left mr-2;}
+.page img[src*="#right"] {@apply float-right ml-2;}
 
 .w-editpage {width: 600px;}
 .w-createbookmark {width: 600px;}

@@ -1111,7 +1111,8 @@ func insertNewPageLinks(db *sql.DB, body string, bookid int64) (string, error) {
 }
 
 func parseMarkdown(s string) string {
-	return string(blackfriday.Run([]byte(s), blackfriday.WithExtensions(blackfriday.HardLineBreak)))
+	return string(blackfriday.Run([]byte(s), blackfriday.WithExtensions(blackfriday.HardLineBreak|blackfriday.BackslashLineBreak)))
+	//return string(blackfriday.Run([]byte(s), blackfriday.WithNoExtensions()))
 }
 
 func queryIsBookAuthor(db *sql.DB, bookid, userid int64) bool {
@@ -1165,6 +1166,7 @@ func createpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		var errmsg string
 		if r.Method == "POST" {
 			body = strings.TrimSpace(r.FormValue("body"))
+			body = strings.ReplaceAll(body, "\r", "") // CRLF => CR
 			for {
 				if body == "" {
 					errmsg = "Please enter some text."
@@ -1268,6 +1270,7 @@ func editpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		var errmsg string
 		if r.Method == "POST" {
 			p.Body = strings.TrimSpace(r.FormValue("body"))
+			p.Body = strings.ReplaceAll(p.Body, "\r", "") // CRLF => CR
 			for {
 				if p.Body == "" {
 					errmsg = "Please enter some text."
