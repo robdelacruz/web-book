@@ -1087,7 +1087,7 @@ func pageUrl(bookName string, pageid int64, prevpageids string) string {
 func convertSrcLinksToMarkdown(body, bookName string, prevpageids string) string {
 	sre := `\[\[(.+?)=>(\d+?)\]\]`
 	re := regexp.MustCompile(sre)
-	body = re.ReplaceAllString(body, spaceToUnderscore(fmt.Sprintf("[$1](/%s/$2?prevpageids=%s)", bookName, prevpageids)))
+	body = re.ReplaceAllString(body, spaceToUnderscore(fmt.Sprintf("[$1](%s/$2?prevpageids=%s)", bookUrl(bookName), prevpageids)))
 	return body
 }
 
@@ -1751,7 +1751,7 @@ func importbookHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 						break
 					}
 
-					b.Name = fmt.Sprintf("%s -- %d", eb.Name, i)
+					b.Name = fmt.Sprintf("%s (%d)", eb.Name, i)
 					i++
 				}
 
