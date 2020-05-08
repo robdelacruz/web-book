@@ -22,21 +22,21 @@
 .btn-1 {@apply rounded py-1 px-2;} 
 .btn-sm {@apply rounded px-2;} 
 
-.w-help {width: 350px;}
-@screen sm {
-    .w-pane {width: 100%;}
-}
+.w-help {width: 100%;}
+.w-pane {width: 100%;}
 @screen md {
+    .w-help {width: 24rem;}
     .w-pane {width: 28rem;}
 }
 
 .page h1, .page h2, .page h3, .page h4 {@apply text-lg;}
-.page p, .page ul, .page ol {@apply mb-2;}
+.page p, .page ul, .page ol, .page blockquote, .page pre {@apply mb-4;}
 .page a {@apply link-1;}
 .page ul {@apply list-disc list-inside;}
 .page ol {@apply list-decimal list-inside;}
-.page blockquote {@apply ml-6;}
-.page pre {@apply font-mono bg-gray-700 p-2;}
+.page blockquote {@apply bg-gray-700 px-8 py-4;}
+.page pre {@apply bg-gray-700 p-2;}
+.page code {@apply font-mono;}
 .page img[src*="#thumb"] {width: 100px;}
 .page img[src*="#sm"] {width: 150px;}
 .page img[src*="#lg"] {width: 200px;}

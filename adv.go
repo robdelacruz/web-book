@@ -1220,29 +1220,30 @@ func createpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		P := makeFprintf(w)
 		P("<section class=\"container main-container\">\n")
 		P("  <section class=\"flex flex-row justify-center\">\n")
-		P("    <section class=\"widget-1 p-4 mr-4\">\n")
-		P("      <form class=\"w-pane\" method=\"post\" action=\"/createpage/?bookid=%d&pageid=%d&prevpageids=%s\">\n", bookid, pageid, prevpageids)
-		P("      <h1 class=\"fg-1 mb-4\">Create Page</h1>")
+		P("    <section class=\"widget-1 p-4\">\n")
+
+		P("      <div class=\"flex flex-row flex-wrap\">\n")
+		P("        <form class=\"w-pane md:mr-4 mb-4\" method=\"post\" action=\"/createpage/?bookid=%d&pageid=%d&prevpageids=%s\">\n", bookid, pageid, prevpageids)
+		P("          <h1 class=\"fg-1 mb-4\">Create Page</h1>")
 		if errmsg != "" {
-			P("<div class=\"mb-2\">\n")
-			P("<p class=\"text-red-500\">%s</p>\n", errmsg)
-			P("</div>\n")
+			P("      <div class=\"mb-2\">\n")
+			P("        <p class=\"text-red-500\">%s</p>\n", errmsg)
+			P("      </div>\n")
 		}
 
-		P("  <div class=\"mb-4\">\n")
-		P("    <label class=\"block label-1\" for=\"body\">text</label>\n")
-		P("    <textarea class=\"block input-1 w-full\" id=\"body\" name=\"body\" rows=\"15\">%s</textarea>\n", body)
-		P("  </div>\n")
+		P("          <div class=\"mb-4\">\n")
+		P("            <label class=\"block label-1\" for=\"body\">left pane</label>\n")
+		P("            <textarea class=\"block input-1 w-full\" id=\"body\" name=\"body\" rows=\"25\">%s</textarea>\n", body)
+		P("          </div>\n")
 
-		P("  <div class=\"\">\n")
-		P("    <button class=\"block mx-auto btn-1 text-gray-800 bg-gray-200\" type=\"submit\">submit</button>\n")
-		P("  </div>\n")
-		P("</form>\n")
+		P("          <div class=\"\">\n")
+		P("            <button class=\"block mx-auto btn-1 text-gray-800 bg-gray-200\" type=\"submit\">submit</button>\n")
+		P("          </div>\n")
+		P("        </form>\n")
+		printHelpWidget(w)
+		P("      </div>\n")
 
 		P("    </section>\n")
-
-		printHelpWidget(w)
-
 		P("  </section>\n")
 		P("</section>\n")
 		printFoot(w)
@@ -1320,7 +1321,7 @@ func editpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		P("    <section class=\"widget-1 p-4\">\n")
 
 		P("      <div class=\"flex flex-row flex-wrap\">\n")
-		P("        <form class=\"w-pane md:mr-4\" method=\"post\" action=\"/editpage/?bookid=%d&pageid=%d&prevpageids=%s\">\n", bookid, pageid, prevpageids)
+		P("        <form class=\"w-pane md:mr-4 mb-4\" method=\"post\" action=\"/editpage/?bookid=%d&pageid=%d&prevpageids=%s\">\n", bookid, pageid, prevpageids)
 		P("          <h1 class=\"fg-1 mb-4\">Edit Page</h1>\n")
 		if errmsg != "" {
 			P("      <div class=\"mb-2\">\n")
@@ -1329,8 +1330,8 @@ func editpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		}
 
 		P("          <div class=\"mb-4\">\n")
-		P("            <label class=\"block label-1\" for=\"body\">text</label>\n")
-		P("            <textarea class=\"block input-1 w-full\" id=\"body\" name=\"body\" rows=\"15\">%s</textarea>\n", p.Body)
+		P("            <label class=\"block label-1\" for=\"body\">left pane</label>\n")
+		P("            <textarea class=\"block input-1 w-full\" id=\"body\" name=\"body\" rows=\"25\">%s</textarea>\n", p.Body)
 		P("          </div>\n")
 
 		P("          <div class=\"\">\n")
@@ -1349,7 +1350,7 @@ func editpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 
 func printHelpWidget(w http.ResponseWriter) {
 	P := makeFprintf(w)
-	P(`<section class="widget-1 w-pane flex flex-col py-4 px-8 bg-gray-200 text-gray-600">
+	P(`<section class="widget-1 w-help flex flex-col py-4 px-8 text-xs bg-gray-200 text-gray-600">
             <div class="flex flex-row justify-between border-b border-gray-500 pb-1 mb-4">
                 <p>
                     <span class="font-bold mr-2">Syntax Reference</span>
@@ -1357,30 +1358,40 @@ func printHelpWidget(w http.ResponseWriter) {
             </div>
             <article class="flex-grow">
                 <div class="mb-4">
-                    <p class="italic">Create a new link:</p>
-                    <code class="block pl-4">
-                        [[New link]]
-                    </code>
-                    <code class="block pl-4">
-                        A sentence with a [[new link]].
-                    </code>
+                    <p class="italic">Link to new page:</p>
+<pre><code class="block pl-4">[[New link]]
+A sentence with a [[new link]].</code></pre>
                 </div>
                 <div class="mb-4">
                     <p class="italic">Create a link to existing page:</p>
-                    <code class="block pl-4">
-                        [[Link to page=>123]]<br>
-                        A sentence with a [[link to page=>123]].
-                    </code>
+<pre><code class="block pl-4">[[Link to page=>123]]
+A sentence with a [[link to page=>123]].</code></pre>
                 </div>
-                <div class="mb-2">
+                <div class="mb-4">
                     <p class="italic">Create external link:</p>
-                    <code class="block pl-4">
-                        [link text](http://en.wikipedia.org)
-                    </code>
+<pre><code class="block pl-4">[link text](http://en.wikipedia.org)</code></pre>
                 </div>
-                <div class="mt-4">
-                    <p class="italic">Format text using markup:</p>
-                    <a class="block link-3 pl-4" target="_blank" href="https://daringfireball.net/projects/markdown/syntax">markdown syntax reference</a>
+                <div class="mb-4">
+                    <p class="italic">Display image:</p>
+<pre><code class="block pl-4">![alt text](/images/pic.jpg)
+![alt text](/images/pic.jpg#thumb)
+![alt text](/images/pic.jpg#sm)
+![alt text](/images/pic.jpg#lg)
+![alt text](/images/pic.jpg#xl)
+![alt text](/images/pic.jpg#sm#left)
+![alt text](/images/pic.jpg#sm#right)
+
+Modifiers:
+#thumb --> size: thumbnail
+#small --> size: small
+#lg    --> size: large
+#xl    --> size: extra large
+#left  --> position on left side
+#right --> position on right side
+</code></pre>
+                </div>
+                <div class="mb-4">
+                    <a class="block link-3" target="_blank" href="https://daringfireball.net/projects/markdown/syntax">Markdown format reference</a>
                 </div>
             </article>
         </section>`)
