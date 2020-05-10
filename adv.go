@@ -1005,7 +1005,7 @@ func printPage(w http.ResponseWriter, r *http.Request, db *sql.DB, login *User, 
 	printNav(w, r, db, login, b, pageid)
 
 	P := makeFprintf(w)
-	P("<section class=\"container main-container\">\n")
+	P("<section class=\"main-container\">\n")
 	P("  <section class=\"flex flex-row justify-center\">\n")
 	P("    <section class=\"widget-1 widget-h flex flex-col py-4 px-8\">\n")
 	P("      <div class=\"flex flex-row justify-between border-b border-gray-500 pb-1 mb-4\">\n")
