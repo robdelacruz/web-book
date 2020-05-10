@@ -113,7 +113,6 @@ Initialize new book file:
 	http.HandleFunc("/logout/", logoutHandler(db))
 	http.HandleFunc("/createaccount/", createaccountHandler(db))
 	http.HandleFunc("/", indexHandler(db))
-	http.HandleFunc("/createpage/", createpageHandler(db))
 	http.HandleFunc("/editpage/", editpageHandler(db))
 	http.HandleFunc("/createbook/", createbookHandler(db))
 	http.HandleFunc("/editbook/", editbookHandler(db))
@@ -1010,9 +1009,7 @@ func printPage(w http.ResponseWriter, r *http.Request, db *sql.DB, login *User, 
 	P("  <section class=\"flex flex-row justify-center\">\n")
 	P("    <section class=\"widget-1 widget-h flex flex-col py-4 px-8\">\n")
 	P("      <div class=\"flex flex-row justify-between border-b border-gray-500 pb-1 mb-4\">\n")
-	P("        <p>\n")
-	P("          <span class=\"fg-1 font-bold mr-2\">%s</span>\n", b.Name)
-	P("        </p>\n")
+	P("        <p class=\"fg-1 font-bold\">%s</p>\n", b.Name)
 	P("        <div>\n")
 	if queryIsBookAuthor(db, b.Bookid, login.Userid) {
 		P("<a class=\"btn-sm text-xs self-center text-gray-800 bg-gray-400 mr-1\" href=\"/editpage?bookid=%d&pageid=%d&prevpageids=%s\">Edit</a>\n", b.Bookid, pageid, prevpageids)
@@ -1025,7 +1022,8 @@ func printPage(w http.ResponseWriter, r *http.Request, db *sql.DB, login *User, 
 	P("        </div>\n")
 	P("      </div>\n")
 
-	P("      <article class=\"page w-pane flex-grow mb-4\">\n")
+	P("      <article class=\"flex flex-row flex-wrap page mb-4\">\n")
+	P("        <div class=\"pane w-pane\">\n")
 	p := queryPage(db, pageid, b.Bookid)
 	if p == nil {
 		P("<p class=\"fg-2\">Page doesn't exist yet.</p>\n")
@@ -1038,11 +1036,18 @@ func printPage(w http.ResponseWriter, r *http.Request, db *sql.DB, login *User, 
 		}
 		p.Body = convertSrcLinksToMarkdown(p.Body, b.Name, ids)
 		if p.Body != "" {
+			// ".pane" line starts a new pane div
+			//sre := `(?m)^\.pane\n$`
+			sre := `\n\.pane\n`
+			re := regexp.MustCompile(sre)
+			p.Body = re.ReplaceAllString(p.Body, "</div><div class=\"pane w-pane\">")
+
 			P("%s\n", parseMarkdown(p.Body))
 		} else {
 			P("<p class=\"fg-2\">(Empty page)</p>\n")
 		}
 	}
+	P("        </div>\n")
 	P("      </article>\n")
 
 	// Show 'Back' link to previous page.
@@ -1148,108 +1153,6 @@ func queryIsBookAuthor(db *sql.DB, bookid, userid int64) bool {
 	return true
 }
 
-func createpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
-	return func(w http.ResponseWriter, r *http.Request) {
-		var err error
-		var body string
-
-		login := getLoginUser(r, db)
-		bookid := idtoi(r.FormValue("bookid"))
-		pageid := idtoi(r.FormValue("pageid"))
-		prevpageids := r.FormValue("prevpageids")
-
-		if bookid == -1 {
-			http.Error(w, "bookid required", 401)
-			return
-		}
-		if !queryIsBookAuthor(db, bookid, login.Userid) {
-			http.Error(w, "book author required", 401)
-			return
-		}
-		if pageid > 0 {
-			if queryPage(db, pageid, bookid) != nil {
-				http.Error(w, "page already exists", 401)
-				return
-			}
-		}
-		b := queryBook(db, bookid)
-		if b == nil {
-			http.Error(w, fmt.Sprintf("bookid %d not found", bookid), 401)
-			return
-		}
-
-		var errmsg string
-		if r.Method == "POST" {
-			body = strings.TrimSpace(r.FormValue("body"))
-			body = strings.ReplaceAll(body, "\r", "") // CRLF => CR
-			for {
-				if body == "" {
-					errmsg = "Please enter some text."
-					break
-				}
-				body, err = insertNewPageLinks(db, body, bookid)
-				if err != nil {
-					http.Error(w, "Server error", 500)
-					return
-				}
-
-				pagetbl := pagetblName(bookid)
-				var result sql.Result
-				if pageid > 0 {
-					s := fmt.Sprintf("INSERT INTO %s (page_id, body) VALUES (?, ?)", pagetbl)
-					result, err = sqlexec(db, s, pageid, body)
-				} else {
-					s := fmt.Sprintf("INSERT INTO %s (body) VALUES (?)", pagetbl)
-					result, err = sqlexec(db, s, body)
-				}
-				if err != nil {
-					log.Printf("DB error saving page (%s)\n", err)
-					errmsg = "A problem occured. Please try again."
-					break
-				}
-				pageid, _ = result.LastInsertId()
-				http.Redirect(w, r, pageUrl(b.Name, pageid, prevpageids), http.StatusSeeOther)
-				return
-			}
-		}
-
-		w.Header().Set("Content-Type", "text/html")
-		printHead(w, nil, nil)
-		printNav(w, r, db, login, b, pageid)
-
-		P := makeFprintf(w)
-		P("<section class=\"container main-container\">\n")
-		P("  <section class=\"flex flex-row justify-center\">\n")
-		P("    <section class=\"widget-1 p-4\">\n")
-
-		P("      <div class=\"flex flex-row flex-wrap\">\n")
-		P("        <form class=\"w-pane md:mr-4 mb-4\" method=\"post\" action=\"/createpage/?bookid=%d&pageid=%d&prevpageids=%s\">\n", bookid, pageid, prevpageids)
-		P("          <h1 class=\"fg-1 mb-4\">Create Page</h1>")
-		if errmsg != "" {
-			P("      <div class=\"mb-2\">\n")
-			P("        <p class=\"text-red-500\">%s</p>\n", errmsg)
-			P("      </div>\n")
-		}
-
-		P("          <div class=\"mb-4\">\n")
-		P("            <label class=\"block label-1\" for=\"body\">left pane</label>\n")
-		P("            <textarea class=\"block input-1 w-full\" id=\"body\" name=\"body\" rows=\"25\">%s</textarea>\n", body)
-		P("          </div>\n")
-
-		P("          <div class=\"\">\n")
-		P("            <button class=\"block mx-auto btn-1 text-gray-800 bg-gray-200\" type=\"submit\">submit</button>\n")
-		P("          </div>\n")
-		P("        </form>\n")
-		printHelpWidget(w)
-		P("      </div>\n")
-
-		P("    </section>\n")
-		P("  </section>\n")
-		P("</section>\n")
-		printFoot(w)
-	}
-}
-
 func editpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
@@ -1319,10 +1222,12 @@ func editpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		P("<section class=\"container main-container mx-auto\">\n")
 		P("  <section class=\"flex flex-row justify-center\">\n")
 		P("    <section class=\"widget-1 p-4\">\n")
-
+		P("      <div class=\"flex flex-row justify-between border-b border-gray-500 pb-1 mb-4\">\n")
+		P("        <p class=\"fg-1 font-bold\">%s</p>\n", b.Name)
+		P("        <p class=\"fg-2 text-xs self-center\">%d</p>\n", pageid)
+		P("      </div>\n")
 		P("      <div class=\"flex flex-row flex-wrap\">\n")
 		P("        <form class=\"w-pane md:mr-4 mb-4\" method=\"post\" action=\"/editpage/?bookid=%d&pageid=%d&prevpageids=%s\">\n", bookid, pageid, prevpageids)
-		P("          <h1 class=\"fg-1 mb-4\">Edit Page</h1>\n")
 		if errmsg != "" {
 			P("      <div class=\"mb-2\">\n")
 			P("        <p class=\"text-red-500\">%s</p>\n", errmsg)
@@ -1330,7 +1235,7 @@ func editpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		}
 
 		P("          <div class=\"mb-4\">\n")
-		P("            <label class=\"block label-1\" for=\"body\">left pane</label>\n")
+		//P("            <label class=\"block label-1\" for=\"body\">text</label>\n")
 		P("            <textarea class=\"block input-1 w-full\" id=\"body\" name=\"body\" rows=\"25\">%s</textarea>\n", p.Body)
 		P("          </div>\n")
 
@@ -1350,7 +1255,7 @@ func editpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 
 func printHelpWidget(w http.ResponseWriter) {
 	P := makeFprintf(w)
-	P(`<section class="widget-1 w-help flex flex-col py-4 px-8 text-xs bg-gray-200 text-gray-600">
+	P(`<section class="widget-1 w-help flex flex-col self-start py-4 px-8 text-xs bg-gray-200 text-gray-600">
             <div class="flex flex-row justify-between border-b border-gray-500 pb-1 mb-4">
                 <p>
                     <span class="font-bold mr-2">Syntax Reference</span>
@@ -1373,22 +1278,15 @@ A sentence with a [[link to page=>123]].</code></pre>
                 </div>
                 <div class="mb-4">
                     <p class="italic">Display image:</p>
-<pre><code class="block pl-4">![alt text](/images/pic.jpg)
-![alt text](/images/pic.jpg#thumb)
-![alt text](/images/pic.jpg#sm)
-![alt text](/images/pic.jpg#lg)
-![alt text](/images/pic.jpg#xl)
-![alt text](/images/pic.jpg#sm#left)
-![alt text](/images/pic.jpg#sm#right)
+<pre><code class="block pl-4">![alt text](/images/pic.jpg#thumb#left)
 
-Modifiers:
-#thumb --> size: thumbnail
-#small --> size: small
-#lg    --> size: large
-#xl    --> size: extra large
-#left  --> position on left side
-#right --> position on right side
+Sizes: thumb, sm, med, lg, xl, stretch
+Float position: left, right
 </code></pre>
+                </div>
+                <div class="mb-4">
+                    <p class="italic">Start new pane:</p>
+<pre><code class="block pl-4">.pane</code></pre>
                 </div>
                 <div class="mb-4">
                     <a class="block link-3" target="_blank" href="https://daringfireball.net/projects/markdown/syntax">Markdown format reference</a>

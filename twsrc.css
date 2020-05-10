@@ -27,6 +27,7 @@
 @screen md {
     .w-help {width: 24rem;}
     .w-pane {width: 28rem;}
+    .page > .pane:not(:last-of-type) {@apply mr-4}
 }
 
 .page h1, .page h2, .page h3, .page h4 {@apply text-lg;}
@@ -39,6 +40,7 @@
 .page code {@apply font-mono;}
 .page img[src*="#thumb"] {width: 100px;}
 .page img[src*="#sm"] {width: 150px;}
+.page img[src*="#med"] {width: 180px;}
 .page img[src*="#lg"] {width: 200px;}
 .page img[src*="#xl"] {width: 300px;}
 .page img[src*="#stretch"] {width: 100%;}
