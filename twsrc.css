@@ -15,7 +15,7 @@
 .link-2 {@apply underline fg-1;}
 .link-3 {@apply underline fg-2;}
 
-.main-container {@apply text-sm py-4 px-4;}
+.main-container {@apply mx-auto text-sm py-4 px-4;}
 .widget-1 {@apply bgfg-1 rounded-lg shadow-lg;}
 .label-1 {@apply fg-1;} 
 .input-1 {@apply border border-color-1 rounded py-1 px-2 bg-1 fg-1;}
