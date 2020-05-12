@@ -736,7 +736,7 @@ func loginHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		printNav(w, r, db, login, nil, 0)
 
 		P := makeFprintf(w)
-		P("<section class=\"container main-container\">\n")
+		P("<section class=\"main-container\">\n")
 		P("  <section class=\"flex flex-row justify-center\">\n")
 		P("    <section class=\"widget-1 p-4\">\n")
 		P("      <h1 class=\"fg-1 mb-4\">Login</h1>")
@@ -849,7 +849,7 @@ func createaccountHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		printNav(w, r, db, login, nil, 0)
 
 		P := makeFprintf(w)
-		P("<section class=\"container main-container\">\n")
+		P("<section class=\"main-container\">\n")
 		P("  <section class=\"flex flex-row justify-center\">\n")
 		P("    <section class=\"widget-1 p-4\">\n")
 		P("      <h1 class=\"fg-1 mb-4\">Create Account</h1>")
@@ -943,7 +943,7 @@ func printBooksMenu(w http.ResponseWriter, r *http.Request, db *sql.DB, login *U
 	printNav(w, r, db, login, nil, 0)
 
 	P := makeFprintf(w)
-	P("<section class=\"container main-container\">\n")
+	P("<section class=\"main-container\">\n")
 	P("  <section class=\"flex flex-row justify-center\">\n")
 	P("    <section class=\"widget-1 widget-h flex flex-col py-4 px-8\">\n")
 	P("      <article class=\"w-pane flex-grow\">\n")
@@ -1219,7 +1219,7 @@ func editpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		printNav(w, r, db, login, b, pageid)
 
 		P := makeFprintf(w)
-		P("<section class=\"container main-container mx-auto\">\n")
+		P("<section class=\"main-container mx-auto\">\n")
 		P("  <section class=\"flex flex-row justify-center\">\n")
 		P("    <section class=\"widget-1 p-4\">\n")
 		P("      <div class=\"flex flex-row justify-between border-b border-gray-500 pb-1 mb-4\">\n")
@@ -1329,7 +1329,7 @@ func createbookHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		printNav(w, r, db, login, nil, 0)
 
 		P := makeFprintf(w)
-		P("<section class=\"container main-container\">\n")
+		P("<section class=\"main-container\">\n")
 		P("  <section class=\"flex flex-row justify-center\">\n")
 		P("    <section class=\"widget-1 p-4\">\n")
 		P("      <form class=\"w-pane mb-4\" method=\"post\" action=\"/createbook/\">\n")
@@ -1409,7 +1409,7 @@ func editbookHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		printNav(w, r, db, login, b, 0)
 
 		P := makeFprintf(w)
-		P("<section class=\"container main-container\">\n")
+		P("<section class=\"main-container\">\n")
 		P("  <section class=\"flex flex-row justify-center\">\n")
 		P("    <section class=\"widget-1 p-4\">\n")
 		P("      <form class=\"w-pane mb-4\" method=\"post\" action=\"/editbook/?bookid=%d\">\n", bookid)
@@ -1522,7 +1522,7 @@ func delbookHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		printNav(w, r, db, login, b, 0)
 
 		P := makeFprintf(w)
-		P("<section class=\"container main-container\">\n")
+		P("<section class=\"main-container\">\n")
 		P("  <section class=\"flex flex-row justify-center\">\n")
 		P("    <section class=\"widget-1 p-4\">\n")
 		P("      <form class=\"w-pane mb-4\" method=\"post\" action=\"/delbook/?bookid=%d\">\n", bookid)
@@ -1688,7 +1688,7 @@ func importbookHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		printNav(w, r, db, login, nil, 0)
 
 		P := makeFprintf(w)
-		P("<section class=\"container main-container\">\n")
+		P("<section class=\"main-container\">\n")
 		P("  <section class=\"flex flex-row justify-center\">\n")
 		P("    <section class=\"widget-1 p-4\">\n")
 		P("      <form class=\"w-pane mb-4\" method=\"post\" action=\"/importbook/\" enctype=\"multipart/form-data\">\n")
@@ -1770,7 +1770,7 @@ func createbookmarkHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) 
 		printNav(w, r, db, login, b, pageid)
 
 		P := makeFprintf(w)
-		P("<section class=\"container main-container\">\n")
+		P("<section class=\"main-container\">\n")
 		P("  <section class=\"flex flex-row justify-center\">\n")
 		P("    <section class=\"widget-1 p-4\">\n")
 		P("      <form class=\"w-createbookmark\" method=\"post\" action=\"/createbookmark/?bookid=%d&pageid=%d&prevpageids=%s\">\n", bookid, pageid, prevpageids)
@@ -1848,7 +1848,7 @@ func editbookmarkHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		printNav(w, r, db, login, b, frompageid)
 
 		P := makeFprintf(w)
-		P("<section class=\"container main-container\">\n")
+		P("<section class=\"main-container\">\n")
 		P("  <section class=\"flex flex-row justify-center\">\n")
 		P("    <section class=\"widget-1 p-4\">\n")
 		P("      <form class=\"w-createbookmark\" method=\"post\" action=\"/editbookmark/?bookmarkid=%d&prevpageids=%s&frompageid=%d\">\n", bookmarkid, prevpageids, frompageid)
@@ -1920,7 +1920,7 @@ func delbookmarkHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		printNav(w, r, db, login, b, frompageid)
 
 		P := makeFprintf(w)
-		P("<section class=\"container main-container\">\n")
+		P("<section class=\"main-container\">\n")
 		P("  <section class=\"flex flex-row justify-center\">\n")
 		P("    <section class=\"widget-1 p-4\">\n")
 		P("      <form class=\"w-createbookmark\" method=\"post\" action=\"/delbookmark/?bookmarkid=%d&prevpageids=%s&frompageid=%d\">\n", bookmarkid, prevpageids, frompageid)
@@ -1973,7 +1973,7 @@ func bookmarksHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		printNav(w, r, db, login, b, frompageid)
 
 		P := makeFprintf(w)
-		P("<section class=\"container main-container\">\n")
+		P("<section class=\"main-container\">\n")
 		P("  <section class=\"flex flex-row justify-center\">\n")
 		P("    <section class=\"widget-1 widget-h flex flex-col py-4 px-8\">\n")
 		P("      <p class=\"fg-1 border-b border-gray-500 pb-1 mb-4\"><span class=\"font-bold\">%s</span> - Bookmarks</p>\n", b.Name)
