@@ -291,46 +291,14 @@ func createAndInitTables(newfile string) {
 		os.Exit(1)
 	}
 
-	_, err = createBook(db, &Book{
-		Name: "Sesame Street Adventure",
-		Desc: `Join your favorite characters - Oscar the Grouch, Big Bird, Snuffleupagus, and Mr. Hooper on a gritty, urban adventure through the mean streets of Sesame Street.`,
-	}, nil, ADMIN_ID)
-	if err != nil {
-		log.Printf("DB error (%s)\n", err)
-		os.Exit(1)
-	}
-	_, err = createBook(db, &Book{
-		Name: "Escape",
-		Desc: `Based on the original *Escape* book by R.A. Montgomery from the Choose Your Own Adventure Books series. You''re the star of the story, choose from 27 possible endings.`,
-	}, nil, ADMIN_ID)
-	if err != nil {
-		log.Printf("DB error (%s)\n", err)
-		os.Exit(1)
-	}
-	_, err = createBook(db, &Book{
-		Name: "Space Patrol",
-		Desc: `You are the commander of Space Rescue Emergency Vessel III. You have spent almost six months alone in space, and your only companion is your computer, Henry. You are steering your ship through a meteorite shower when an urgent signal comes from headquarters- a ship in your sector is under attack by space pirates!`,
-	}, nil, ADMIN_ID)
-	if err != nil {
-		log.Printf("DB error (%s)\n", err)
-		os.Exit(1)
-	}
-	_, err = createBook(db, &Book{
-		Name: "Prisoner of the Ant People",
-		Desc: `R. A. Montgomery takes YOU on an otherworldly adventure as you fight off the the feared Ant People, who have recently joined forces with the Evil Power Master.`,
-	}, nil, ADMIN_ID)
-	if err != nil {
-		log.Printf("DB error (%s)\n", err)
-		os.Exit(1)
-	}
-	_, err = createBook(db, &Book{
-		Name: "War with the Evil Power Master",
-		Desc: `You are the commander of the Lacoonian System Rapid Force response team, in charge of protecting all planets in the System. You learn that the Evil Power Master has zeroed in on three planets and plans to destroy them. The safety of the Lacoonian System depends on you!`,
-	}, nil, ADMIN_ID)
-	if err != nil {
-		log.Printf("DB error (%s)\n", err)
-		os.Exit(1)
-	}
+	//	_, err = createBook(db, &Book{
+	//		Name: "Sesame Street Adventure",
+	//		Desc: `Join your favorite characters - Oscar the Grouch, Big Bird, Snuffleupagus, and Mr. Hooper on a gritty, urban adventure through the mean streets of Sesame Street.`,
+	//	}, nil, ADMIN_ID)
+	//	if err != nil {
+	//		log.Printf("DB error (%s)\n", err)
+	//		os.Exit(1)
+	//	}
 }
 
 func getLoginUser(r *http.Request, db *sql.DB) *User {
