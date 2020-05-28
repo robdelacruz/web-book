@@ -535,6 +535,10 @@ func createBook(db *sql.DB, b *Book, pp []*Page, userid int64) (int64, error) {
 		return 0, err
 	}
 
+	if len(pp) == 0 {
+		p := Page{Pageid: 1, Body: ""}
+		pp = append(pp, &p)
+	}
 	s = fmt.Sprintf("INSERT INTO %s (page_id, body) VALUES (?, ?)", pagetblName(bookid))
 	for _, p := range pp {
 		_, err = txexec(tx, s, p.Pageid, p.Body)
@@ -729,7 +733,7 @@ func loginHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		P("        </div>\n")
 		P("      </form>\n")
 
-		P("      <p class=\"text-center\"><a class=\"link-2\" href=\"/createaccount/?from=%s\">Create New Account</a></p>\n", qfrom)
+		P("      <p class=\"text-center\"><a class=\"fg-1 underline\" href=\"/createaccount/?from=%s\">Create New Account</a></p>\n", qfrom)
 		P("    </section>\n")
 		P("  </section>\n")
 		P("</section>\n")
@@ -1257,7 +1261,7 @@ Float position: left, right
 <pre><code class="block pl-4">.pane</code></pre>
                 </div>
                 <div class="mb-4">
-                    <a class="block link-3" target="_blank" href="https://daringfireball.net/projects/markdown/syntax">Markdown format reference</a>
+                    <a class="block link-3 underline" target="_blank" href="https://daringfireball.net/projects/markdown/syntax">Markdown format reference</a>
                 </div>
             </article>
         </section>`)
