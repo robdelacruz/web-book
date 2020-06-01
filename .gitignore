@@ -1,7 +1,7 @@
 *.swp
 *.db
 *.o
-adv
+wb
 static/style.css
 node_modules/
 package-lock.json
