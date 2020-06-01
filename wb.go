@@ -357,12 +357,12 @@ func querySite(db *sql.DB) *Site {
 	err := row.Scan(&site.Title, &site.Desc)
 	if err == sql.ErrNoRows {
 		// Site settings row not defined yet, just use default Site values.
-		site.Title = "Game Book"
+		site.Title = "Web Books"
 		site.Desc = ""
 	} else if err != nil {
 		// DB error, log then use common site settings.
 		log.Printf("error reading site settings for siteid %d (%s)\n", 1, err)
-		site.Title = "Game Book"
+		site.Title = "Web Books"
 	}
 	return &site
 }
@@ -626,7 +626,7 @@ func printNav(w http.ResponseWriter, r *http.Request, db *sql.DB, login *User, b
 
 	// Menu section (left part)
 	P("<div>\n")
-	P("<h1 class=\"inline mr-1\"><a href=\"/\">Game Books</a></h1>\n")
+	P("<h1 class=\"inline mr-1\"><a href=\"/\">Web Books</a></h1>\n")
 	P("<ul class=\"list-none inline\">\n")
 	if b != nil {
 		P("  <li class=\"inline mr-2\">\n")
