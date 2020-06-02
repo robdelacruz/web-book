@@ -80,24 +80,24 @@ func main() {
 		s := `Usage:
 
 Start webservice using book database file:
-	adv <book_file>
+	wb <books.db>
 
 Initialize new book database file:
-	nb -i <book_db>
+	wb -i <books.db>
 
 Import a book into database:
-	wb -import <book.json> <book_db>
+	wb -import <book.json> <books.db>
 
 `
 		fmt.Printf(s)
 		os.Exit(0)
 	}
 
-	// Exit if specified notes file doesn't exist.
+	// Exit if db file doesn't exist.
 	dbfile := parms[0]
 	if !fileExists(dbfile) {
-		s := fmt.Sprintf(`Book database file '%s' doesn't exist. Create one using:
-	nb -i <book_file>
+		s := fmt.Sprintf(`Books database file '%s' doesn't exist. Create one using:
+	wb -i <books.db>
 `, dbfile)
 		fmt.Printf(s)
 		os.Exit(1)
