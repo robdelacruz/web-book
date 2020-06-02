@@ -63,7 +63,7 @@ func main() {
 	os.Args = os.Args[1:]
 	sw, parms := parseArgs(os.Args)
 
-	// [-i new_file]  Create and initialize book file
+	// [-i new_file]  Create and initialize book database file
 	if sw["i"] != "" {
 		dbfile := sw["i"]
 		if fileExists(dbfile) {
@@ -79,11 +79,14 @@ func main() {
 	if len(parms) == 0 {
 		s := `Usage:
 
-Start webservice using existing book file:
+Start webservice using book database file:
 	adv <book_file>
 
-Initialize new book file:
-	nb -i <book_file>
+Initialize new book database file:
+	nb -i <book_db>
+
+Import a book into database:
+	wb -import <book.json> <book_db>
 
 `
 		fmt.Printf(s)
@@ -93,7 +96,7 @@ Initialize new book file:
 	// Exit if specified notes file doesn't exist.
 	dbfile := parms[0]
 	if !fileExists(dbfile) {
-		s := fmt.Sprintf(`Book file '%s' doesn't exist. Create one using:
+		s := fmt.Sprintf(`Book database file '%s' doesn't exist. Create one using:
 	nb -i <book_file>
 `, dbfile)
 		fmt.Printf(s)
@@ -103,6 +106,28 @@ Initialize new book file:
 	db, err := sql.Open("sqlite3", dbfile)
 	if err != nil {
 		fmt.Printf("Error opening '%s' (%s)\n", dbfile, err)
+		os.Exit(1)
+	}
+
+	// [-import book.json] Import a book file into database
+	if sw["import"] != "" {
+		bookfile := sw["import"]
+		if !fileExists(bookfile) {
+			fmt.Printf("Book file '%s' doesn't exist.\n", bookfile)
+			os.Exit(1)
+		}
+		f, err := os.Open(bookfile)
+		if err != nil {
+			fmt.Printf("Error opening book file '%s' (%s)\n", bookfile, err)
+			os.Exit(1)
+		}
+		err = importBook(db, f, ADMIN_ID)
+		if err != nil {
+			fmt.Printf("Error importing book file '%s' (%s)\n", bookfile, err)
+			os.Exit(1)
+		}
+
+		fmt.Printf("Book successfully imported.\n")
 		os.Exit(1)
 	}
 
@@ -134,7 +159,7 @@ func parseArgs(args []string) (map[string]string, []string) {
 	parms := []string{}
 
 	standaloneSwitches := []string{}
-	definitionSwitches := []string{"i"}
+	definitionSwitches := []string{"i", "import"}
 	fNoMoreSwitches := false
 	curKey := ""
 
@@ -1578,6 +1603,56 @@ func exportbookHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 	}
 }
 
+func importBook(db *sql.DB, r io.Reader, userid int64) error {
+	bs, err := ioutil.ReadAll(r)
+	if err != nil {
+		log.Printf("importBook: IO error reading file (%s)\n", err)
+		return err
+	}
+
+	var eb ExportBook
+	err = json.Unmarshal(bs, &eb)
+	if err != nil {
+		log.Printf("importBook: Error unmarshaling file (%s)\n", err)
+		return err
+	}
+
+	var b Book
+	b.Name = eb.Name
+	b.Desc = eb.Desc
+
+	// If another book has the same name, rename to
+	// "Book Name -- 1", "Book Name -- 2", etc to make name unique.
+	i := 1
+	for {
+		foundb, err := queryBookName(db, b.Name)
+		if err != nil {
+			log.Printf("importBook: Error querying existing book names (%s)\n", err)
+			return err
+		}
+		if foundb == nil {
+			break
+		}
+
+		b.Name = fmt.Sprintf("%s (%d)", eb.Name, i)
+		i++
+	}
+
+	var pp []*Page
+	for k, body := range eb.Pages {
+		pageid := idtoi(k)
+		pp = append(pp, &Page{Pageid: pageid, Body: body})
+	}
+
+	_, err = createBook(db, &b, pp, userid)
+	if err != nil {
+		log.Printf("importBook: Error creating book (%s)\n", err)
+		return err
+	}
+
+	return nil
+}
+
 func importbookHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		login := getLoginUser(r, db)
@@ -1602,50 +1677,9 @@ func importbookHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 					break
 				}
 
-				bs, err := ioutil.ReadAll(file)
+				err = importBook(db, file, login.Userid)
 				if err != nil {
-					log.Printf("importbookhandler: IO error reading file: %s\n", err)
-					errmsg = "A problem occured. Please try again."
-					break
-				}
-
-				var eb ExportBook
-				err = json.Unmarshal(bs, &eb)
-				if err != nil {
-					log.Printf("importbookhandler: Error unmarshaling file: %s\n", err)
-					errmsg = "Book cannot be read from file. Please try again."
-					break
-				}
-
-				var b Book
-				b.Name = eb.Name
-				b.Desc = eb.Desc
-
-				// If another book has the same name, rename to
-				// "Book Name -- 1", "Book Name -- 2", etc to make name unique.
-				i := 1
-				for {
-					foundb, err := queryBookName(db, b.Name)
-					if handleDbErr(w, err, "importbookhandler") {
-						return
-					}
-					if foundb == nil {
-						break
-					}
-
-					b.Name = fmt.Sprintf("%s (%d)", eb.Name, i)
-					i++
-				}
-
-				var pp []*Page
-				for k, body := range eb.Pages {
-					pageid := idtoi(k)
-					pp = append(pp, &Page{Pageid: pageid, Body: body})
-				}
-
-				_, err = createBook(db, &b, pp, login.Userid)
-				if err != nil {
-					log.Printf("Error creating book (%s)\n", err)
+					log.Printf("importbookhandler: Error importing book (%s)\n", err)
 					errmsg = "A problem occured. Please try again."
 					break
 				}
