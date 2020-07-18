@@ -15,8 +15,8 @@ import (
 	"strings"
 
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/shurcooL/github_flavored_markdown"
 	"golang.org/x/crypto/bcrypt"
-	"gopkg.in/russross/blackfriday.v2"
 )
 
 const ADMIN_ID = 1
@@ -1031,7 +1031,7 @@ func printPage(w http.ResponseWriter, r *http.Request, db *sql.DB, login *User, 
 		} else {
 			ids = fmt.Sprintf("%d", pageid)
 		}
-		p.Body = convertSrcLinksToMarkdown(p.Body, b.Name, ids)
+		p.Body = parseLinks(p.Body, b.Name, ids)
 		if p.Body != "" {
 			// ".pane" line starts a new pane div
 			//sre := `(?m)^\.pane\n$`
@@ -1086,7 +1086,7 @@ func pageUrl(bookName string, pageid int64, prevpageids string) string {
 	return fmt.Sprintf("/%s/%d?prevpageids=%s", url.QueryEscape(spaceToUnderscore(bookName)), pageid, prevpageids)
 }
 
-func convertSrcLinksToMarkdown(body, bookName string, prevpageids string) string {
+func parseLinks(body, bookName string, prevpageids string) string {
 	sre := `\[\[(.+?)=>(\d+?)\]\]`
 	re := regexp.MustCompile(sre)
 	body = re.ReplaceAllString(body, spaceToUnderscore(fmt.Sprintf("[$1](%s/$2?prevpageids=%s)", bookUrl(bookName), prevpageids)))
@@ -1128,8 +1128,8 @@ func insertNewPageLinks(db *sql.DB, body string, bookid int64) (string, error) {
 }
 
 func parseMarkdown(s string) string {
-	return string(blackfriday.Run([]byte(s), blackfriday.WithExtensions(blackfriday.HardLineBreak|blackfriday.BackslashLineBreak)))
-	//return string(blackfriday.Run([]byte(s), blackfriday.WithNoExtensions()))
+	s = strings.ReplaceAll(s, "%", "%%")
+	return string(github_flavored_markdown.Markdown([]byte(s)))
 }
 
 func queryIsBookAuthor(db *sql.DB, bookid, userid int64) bool {
@@ -1284,6 +1284,11 @@ Float position: left, right
                 <div class="mb-4">
                     <p class="italic">Start new pane:</p>
 <pre><code class="block pl-4">.pane</code></pre>
+                </div>
+                <div class="mb-4">
+                    <p class="italic">Add newline within a paragraph:</p>
+<pre><code class="block pl-4">Put two spaces at the end of the line.__
+Or add &lt;br&gt; at the end of the line.&lt;br&gt;</code></pre>
                 </div>
                 <div class="mb-4">
                     <a class="block link-3 underline" target="_blank" href="https://daringfireball.net/projects/markdown/syntax">Markdown format reference</a>

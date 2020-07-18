@@ -5,10 +5,10 @@ dep:
 	sudo apt install curl software-properties-common
 	curl -sL https://deb.nodesource.com/setup_13.x | sudo bash -
 	sudo apt install nodejs
-	sudo npm install -g npx
+	sudo npm --force install -g npx
 	go get github.com/mattn/go-sqlite3
 	go get golang.org/x/crypto/bcrypt
-	go get gopkg.in/russross/blackfriday.v2
+	go get github.com/shurcooL/github_flavored_markdown
 
 webtools:
 	npm install tailwindcss
