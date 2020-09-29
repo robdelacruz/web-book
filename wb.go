@@ -624,7 +624,7 @@ func printHead(w io.Writer, jsurls []string, cssurls []string) {
 		P("<script src=\"%s\" defer></script>\n", jsurl)
 	}
 	P("</head>\n")
-	P("<body>\n")
+	P("<body class=\"bg-gray-900\">\n")
 }
 
 func printFoot(w io.Writer) {
